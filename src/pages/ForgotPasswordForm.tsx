@@ -5,6 +5,8 @@ import { ArrowLeftIcon } from "../components/Icons";
 import { useAppNavigation } from "../hooks/useAppNavigation";
 import axios from "axios";
 import axiosInstance from "../utils/axiosInstance";
+import type { FormErrors } from "../types";
+import { parseApiErrors } from "../utils/parseApiErrors";
 
 export const ForgotPasswordForm: React.FC = () => {
   const [email, setEmail] = useState("");
@@ -35,11 +37,18 @@ export const ForgotPasswordForm: React.FC = () => {
       });
 
       if (response.status === 200) {
-        goTo("/verification");
+        // Pass the email to the verification screen via query param
+        const encoded = encodeURIComponent(email);
+        goTo(`/verification?email=${encoded}`);
       }
-    } catch (e) {
-        console.error(e);
-      setError("Something went wrong. Please try again.");
+    } catch (err: any) {
+          const newErrors = parseApiErrors(err);
+    
+          // set the general error string into the string state
+          setError(
+            newErrors.general ??
+              (err instanceof Error ? err.message : "An unexpected error occurred")
+          );
     } finally {
       setIsLoading(false);
     }

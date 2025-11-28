@@ -19,3 +19,20 @@ export type IconProps = React.SVGProps<SVGSVGElement>;
 export interface CaptchaProps {
   onCaptchaChange: (token: string) => void;
 }
+
+
+
+export interface Permission {
+  id: number;
+  code: string;
+  label: string;
+  category: string;
+}
+
+export interface Role {
+  id: number;
+ role_name: string;
+  description: string;
+  is_active: boolean;
+  permissions: Permission[];
+}

@@ -2,12 +2,17 @@ import React, { useState, useEffect } from "react";
 import { ArrowLeft } from "lucide-react";
 import OtpInput from "../components/OtpInput";
 import { useAppNavigation } from "../hooks/useAppNavigation";
+import { useLocation } from "react-router-dom";
 import axiosInstance from "../utils/axiosInstance";
+import type { FormErrors } from "../types";
 
 const VerificationScreen: React.FC = () => {
   const [otp, setOtp] = useState("");
   const [timeLeft, setTimeLeft] = useState(41); // 41 seconds as per screenshot
-  const email = "admin@gmail.com";
+  const location = useLocation();
+  const params = new URLSearchParams(location.search);
+  const [errors, setErrors] = useState<FormErrors>({});
+  const email = params.get("email") ?? "sri@gmail.com";
   const { goBack, goTo } = useAppNavigation();
 
   useEffect(() => {
@@ -32,25 +37,64 @@ const VerificationScreen: React.FC = () => {
         otp: otp,
       });
       if (response.status === 200) {
+        const data = response.data;
+        // store reset token if provided
+        if (data?.reset_token) {
+          localStorage.setItem("reset_token", data.reset_token);
+        }
         goTo("/create-password");
       }
-const data = await response.data;
-      console.log("OTP verification response data:", data);
-
-const {detail,reset_token} = data;
-
-localStorage.setItem("reset_token", reset_token);
+    } catch (err: any) {
+          const newErrors: FormErrors = {};
+    console.error("Login error:", err);
+          // Helper to extract error data from various possible structures (Axios, etc)
+          const getErrorData = (error: any) => {
+            // Standard Axios Error structure (err.response.data.error)
+            if (error?.response?.data?.error) return error.response.data.error;
+            // Response object directly thrown (err.data.error)
+            if (error?.data?.error) return error.data.error;
+            return null;
+          };
     
-    } catch (error: any) {
-      console.error("OTP verification error:", error);
-      alert("Invalid OTP. Please try again.");
-    }
+          const apiErrors = getErrorData(err);
+    
+          if (apiErrors) {
+             const errorList = Array.isArray(apiErrors) ? apiErrors : [apiErrors];
+             // Join all errors into a single string for the general error field
+             // This ensures all errors are displayed at the top, regardless of content
+             newErrors.general = errorList.join(', ');
+          } else {
+             // Fallback for standard Error objects or unhandled cases
+             newErrors.general = err instanceof Error ? err.message : 'An unexpected error occurred';
+          }
+    
+          setErrors(newErrors)
   };
+  }
+const handleResendOtp = async () => { 
+
+    try {
+      const response = await axiosInstance.post("/accounts/otp-request/", {
+        gmail: email,
+      });
+      if (response.status === 200) {
+        console.log("OTP resent successfully");
+      }
+    } catch (err) {
+      console.error("Resend OTP error:", err);
+    }
+  }
+
+  // Clear general error when user edits the OTP
+  useEffect(() => {
+    if (errors.general) setErrors((prev) => ({ ...prev, general: undefined }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [otp]);
 
   const handleResend = () => {
     if (timeLeft === 0) {
       setTimeLeft(41);
-      alert("Code resent!");
+      handleResendOtp();
     }
   };
 
@@ -65,6 +109,26 @@ localStorage.setItem("reset_token", reset_token);
         Please enter the four digit verification code we sent to
       </p>
       <p className="text-gray-900 font-bold text-lg mb-6">{email}</p>
+
+      {/* General error alert (invalid/expired OTP etc.) */}
+      {errors.general && (
+        <div className="mb-6 p-4 bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg flex items-center max-w-md mx-auto">
+          <svg
+            className="w-5 h-5 mr-2 flex-shrink-0"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth="2"
+              d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"
+            ></path>
+          </svg>
+          <div>{errors.general}</div>
+        </div>
+      )}
 
       {/* OTP Input Section */}
       <div className="w-full flex justify-center">

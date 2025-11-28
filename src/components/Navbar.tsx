@@ -1,0 +1,95 @@
+  import React from 'react';
+  import { useNavigate } from 'react-router-dom';
+  import { LayoutGrid, Briefcase, FileText, Users, CheckSquare, Settings, Bell, Search } from 'lucide-react';
+
+  interface NavbarProps {
+    userRole: 'admin' | 'user' | 'manager';
+  }
+
+  export const Navbar: React.FC<NavbarProps> = ({ userRole }) => {
+    const navigate = useNavigate();
+
+    const navItems = [
+      { label: 'Pipeline', icon: <LayoutGrid size={18} />, roles: ['admin', 'manager', 'user'], path: '/dashboard' },
+      { label: 'Projects', icon: <Briefcase size={18} />, roles: ['admin', 'manager', 'user'], path: '/projects' },
+      { label: 'Reports', icon: <FileText size={18} />, roles: ['admin', 'manager'], path: '/reports' },
+      { label: 'Contacts', icon: <Users size={18} />, roles: ['admin', 'manager', 'user'], path: '/contacts' },
+      { label: 'Tasks', icon: <CheckSquare size={18} />, roles: ['admin', 'manager', 'user'], path: '/tasks' },
+      { label: 'Administration', icon: <Settings size={18} />, roles: ['admin'], path: '/administration' },
+    ];
+
+    return (
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-30 w-full">
+        <div className="px-4 sm:px-6 lg:px-8">
+          <div className="flex justify-between h-16 max-w-[1600px] mx-auto">
+          
+            {/* Left Side: Logo & Nav Links */}
+            <div className="flex items-center gap-8">
+              <div className="flex-shrink-0 flex items-center gap-2 cursor-pointer" onClick={() => navigate('/dashboard')}>
+                <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-blue-600 to-indigo-600 flex items-center justify-center text-white font-bold">
+                  SI
+                </div>
+             
+              </div>
+
+              <div className="hidden md:flex space-x-1">
+                {navItems.map((item) => {
+                  if (!item.roles.includes(userRole)) return null;
+                
+                  const isActive = item.label === 'Administration'; // Simulating active state for demo logic or just styling
+                  return (
+                    <button
+                      key={item.label}
+                      onClick={() => navigate(item.path)}
+                      className={`
+                        px-3 py-2 rounded-md text-lg font-bold transition-colors  duration-200 flex items-center gap-2
+                        ${item.label === 'Dashboard' 
+                          ? 'bg-gray-100 text-blue-700' 
+                          : 'text-black hover:text-gray-700 hover:bg-gray-100 '
+                        }
+                      `}
+                    >
+                      {item.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Right Side: Search & Profile */}
+            <div className="flex items-center gap-4">
+              {/* <div className="hidden lg:flex relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
+                  <input 
+                      type="text" 
+                      placeholder="Search..." 
+                      className="pl-9 pr-4 py-1.5 bg-gray-50 border border-gray-200 rounded-full text-sm focus:outline-none focus:ring-2 focus:ring-blue-500/20 focus:border-blue-500 w-48 transition-all"
+                  />
+              </div>
+            
+              <button className="relative p-2 text-gray-500 hover:text-gray-700 transition-colors rounded-full hover:bg-gray-100">
+                <Bell size={20} />
+                <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
+              </button> */}
+            
+              <div className="h-8 w-8 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-xs cursor-pointer">
+                JD
+              </div>
+            </div>
+          </div>
+        </div>
+      
+        {/* Mobile Menu (Simplified for this demo) */}
+        <div className="md:hidden border-t border-gray-100 overflow-x-auto">
+          <div className="flex px-4 py-2 space-x-4 min-w-max">
+             {navItems.map(item => (
+                 item.roles.includes(userRole) && (
+                     <span key={item.label} className="text-sm font-medium font-bold text-gray-600 whitespace-nowrap py-2" onClick={() => navigate(item.path)}>{item.label}</span>
+                 )
+             ))}
+          </div>
+        </div>
+      </nav>
+    );
+  };
+          

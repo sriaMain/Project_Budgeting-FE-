@@ -7,6 +7,9 @@ import type { LoginFormData, FormErrors } from "../types";
 import { Link } from "react-router-dom";
 import { Captcha } from "../components/Captcha";
 import axiosInstance from "../utils/axiosInstance";
+import { useAppNavigation } from "../hooks/useAppNavigation";
+import { useDispatch } from "react-redux";
+import { parseApiErrors } from "../utils/parseApiErrors";
 
 export const LoginForm: React.FC = () => {
   const [formData, setFormData] = useState<LoginFormData>({
@@ -22,6 +25,10 @@ export const LoginForm: React.FC = () => {
   const [loginSuccess, setLoginSuccess] = useState(false);
   const [captchaInput, setCaptchaInput] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
+  const { goTo } = useAppNavigation();
+  const dispatch = useDispatch();
+
+
 
   const togglePasswordVisibility = useCallback(() => {
     setShowPassword((prev) => !prev);
@@ -95,33 +102,14 @@ export const LoginForm: React.FC = () => {
       const response = await axiosInstance.post("/accounts/login/", payLoad);
 
       if (response.status === 200) {
-        setLoginSuccess(true);
+      goTo("/dashboard");
       }
+
+      dispatch({ type: "auth/loginSuccess", payload: {isAuthenticated: true, userRole: response.data.role, accessToken: response.data.access_token }, });
       console.log("login succesfull");
       // Here you would normally redirect or update global auth state
     }  catch (err: any) {
-      const newErrors: FormErrors = {};
-console.error("Login error:", err);
-      // Helper to extract error data from various possible structures (Axios, etc)
-      const getErrorData = (error: any) => {
-        // Standard Axios Error structure (err.response.data.error)
-        if (error?.response?.data?.error) return error.response.data.error;
-        // Response object directly thrown (err.data.error)
-        if (error?.data?.error) return error.data.error;
-        return null;
-      };
-
-      const apiErrors = getErrorData(err);
-
-      if (apiErrors) {
-         const errorList = Array.isArray(apiErrors) ? apiErrors : [apiErrors];
-         // Join all errors into a single string for the general error field
-         // This ensures all errors are displayed at the top, regardless of content
-         newErrors.general = errorList.join(', ');
-      } else {
-         // Fallback for standard Error objects or unhandled cases
-         newErrors.general = err instanceof Error ? err.message : 'An unexpected error occurred';
-      }
+      const newErrors = parseApiErrors(err);
 
       setErrors(newErrors);} finally {
       setIsLoading(false);
