@@ -3,7 +3,7 @@ import {initializeAuth} from "./authThunk";
 
 interface initialStateType {
   isAuthenticated: boolean;
-  userRole: "admin" | "user" | "manager" | null;
+  userRole: "admin" | "user" | "manager"|null;
   accessToken: string | null;
 }
 
@@ -18,7 +18,7 @@ export const authSlice = createSlice({
   initialState,
   reducers: {
     loginSuccess: (state, action) => {
-      state.isAuthenticated = action.payload.isAuthenticated;
+      state.isAuthenticated = true;
       state.userRole = action.payload.userRole;
       state.accessToken = action.payload.accessToken;
     },

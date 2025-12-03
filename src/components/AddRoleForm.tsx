@@ -3,6 +3,8 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Search, ChevronRight, ChevronDown, ArrowRight, ArrowLeft, Save, Plus, Loader2 } from 'lucide-react';
 import  type { Permission, Role } from '../types';
 import axiosInstance from '../utils/axiosInstance';
+import { Toast } from './Toast';
+import { parseApiErrors } from '../utils/parseApiErrors';
 
 // Fallback Data only used if API fails entirely
 const FALLBACK_PERMISSIONS: Permission[] = [
@@ -43,38 +45,74 @@ const AddRoleForm: React.FC<AddRoleFormProps> = ({ onCancel, onSuccess, role = n
   const [rightSearch, setRightSearch] = useState('');
   const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set());
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState('');
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [errors, setErrors] = useState<{ roleName?: string; permissions?: string; general?: string }>({});
 
   // Fetch Permissions from Roles API
   useEffect(() => {
     const fetchPermissionsFromRoles = async () => {
       setIsLoadingPermissions(true);
       try {
-        // Fetching roles to extract available permissions from them
-        const response = await axiosInstance.get('/roles/roles');
-        
-        if (response.status === 200) {
-          const rolesData: Role[] = response.data;
-          
+        // Try fetching permissions directly (expected shape: array of Permission)
+        const resp = await axiosInstance.get('/roles/permissions/');
+
+        if (resp.status === 200 && Array.isArray(resp.data)) {
+          const maybePerms = resp.data as any[];
+
+          // Detect if this is a direct permissions list (has 'code'/'label')
+          if (maybePerms.length > 0 && (maybePerms[0].code || maybePerms[0].label)) {
+            const perms = maybePerms as Permission[];
+            setAllPermissions(perms);
+            const categories = new Set(perms.map(p => p.category));
+            setExpandedCategories(categories);
+            setIsLoadingPermissions(false);
+            return;
+          }
+
+          // Otherwise, it might be a list of roles with embedded permissions; fall through
+          const rolesData: Role[] = resp.data as unknown as Role[];
+
           // Extract unique permissions from all roles
+          const uniquePermsMap = new Map<number, Permission>();
+          rolesData.forEach(r => {
+            if (r.permissions && Array.isArray(r.permissions)) {
+              r.permissions.forEach(p => {
+                if (!uniquePermsMap.has(p.id)) uniquePermsMap.set(p.id, p);
+              });
+            }
+          });
+
+          const derivedPermissions = Array.from(uniquePermsMap.values());
+          if (derivedPermissions.length > 0) {
+            setAllPermissions(derivedPermissions);
+            const categories = new Set(derivedPermissions.map(p => p.category));
+            setExpandedCategories(categories);
+            setIsLoadingPermissions(false);
+            return;
+          }
+        }
+
+        // If direct permissions endpoint didn't return useful data, try fetching roles and extracting permissions
+        const rolesResp = await axiosInstance.get('/roles/roles');
+        if (rolesResp.status === 200 && Array.isArray(rolesResp.data)) {
+          const rolesData: Role[] = rolesResp.data;
           const uniquePermsMap = new Map<number, Permission>();
           rolesData.forEach(role => {
             if (role.permissions && Array.isArray(role.permissions)) {
               role.permissions.forEach(p => {
-                if (!uniquePermsMap.has(p.id)) {
-                  uniquePermsMap.set(p.id, p);
-                }
+                if (!uniquePermsMap.has(p.id)) uniquePermsMap.set(p.id, p);
               });
             }
           });
-          
+
           const derivedPermissions = Array.from(uniquePermsMap.values());
           setAllPermissions(derivedPermissions);
-          
-          // Initialize categories
           const categories = new Set(derivedPermissions.map(p => p.category));
           setExpandedCategories(categories);
         } else {
-            throw new Error('Failed to fetch roles');
+          throw new Error('Failed to fetch permissions or roles');
         }
       } catch (error) {
         console.warn("Using fallback permissions data due to API error:", error);
@@ -156,9 +194,10 @@ const AddRoleForm: React.FC<AddRoleFormProps> = ({ onCancel, onSuccess, role = n
   };
 
   const handleMoveRight = () => {
-    const toMove = availablePermissions.filter(p => leftSelectedIds.has(p.id));
+    const toMove = filteredAvailable.filter(p => leftSelectedIds.has(p.id));
     setChosenPermissions([...chosenPermissions, ...toMove]);
     setLeftSelectedIds(new Set()); // Clear selection
+    if (errors.permissions) setErrors(prev => ({ ...prev, permissions: undefined }));
   };
 
   const handleMoveLeft = () => {
@@ -178,11 +217,22 @@ const AddRoleForm: React.FC<AddRoleFormProps> = ({ onCancel, onSuccess, role = n
   }
 
   const handleSubmit = async (addAnother: boolean = false) => {
+    const newErrors: { roleName?: string; permissions?: string } = {};
+    
     if (!roleName.trim()) {
-      alert("Role Name is required");
+      newErrors.roleName = "Role name is required";
+    }
+    
+    if (chosenPermissions.length === 0) {
+      newErrors.permissions = "At least one permission must be selected";
+    }
+    
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
-
+    
+    setErrors({});
     setIsSubmitting(true);
 
     try {
@@ -214,21 +264,49 @@ const AddRoleForm: React.FC<AddRoleFormProps> = ({ onCancel, onSuccess, role = n
             setChosenPermissions([]);
             setLeftSelectedIds(new Set());
             setRightSelectedIds(new Set());
+            
+            // Show toast for add another
+            setToastMessage(role ? 'Role updated successfully!' : 'Role created successfully!');
+            setShowToast(true);
+            setTimeout(() => setShowToast(false), 3000);
         } else {
-            onSuccess();
+            // Show toast and navigate after delay
+            setIsNavigating(true);
+            setToastMessage(role ? 'Role updated successfully!' : 'Role created successfully!');
+            setShowToast(true);
+            setTimeout(() => {
+                onSuccess();
+            }, 1800);
         }
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save role", error);
-      alert('Failed to save role. Please try again or check the console for details.');
+      const apiErrors = parseApiErrors(error);
+      
+   setErrors(apiErrors)
     } finally {
         setIsSubmitting(false);
     }
   };
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 md:p-8 animate-fade-in-down w-full max-w-full">
+    <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 md:p-8 animate-fade-in-down w-full max-w-full relative">
+      {/* Blur overlay when navigating */}
+      {isNavigating && (
+        <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-10 pointer-events-auto rounded-xl" />
+      )}
+      
       <div className="mb-8">
         <h2 className="text-2xl font-bold text-gray-900">{role ? 'Edit Role' : 'Add Role'}</h2>
+        
+        {/* General Error Alert */}
+        {errors.general && (
+          <div className="mt-4 p-4 bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg flex items-center">
+            <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path>
+            </svg>
+            {errors.general}
+          </div>
+        )}
       </div>
 
       <div className="space-y-8">
@@ -239,10 +317,18 @@ const AddRoleForm: React.FC<AddRoleFormProps> = ({ onCancel, onSuccess, role = n
                 <input 
                     type="text"
                     value={roleName}
-                    onChange={(e) => setRoleName(e.target.value)}
+                    onChange={(e) => {
+                      setRoleName(e.target.value);
+                      if (errors.roleName) setErrors(prev => ({ ...prev, roleName: undefined }));
+                    }}
                     placeholder="Enter Role Name"
-                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                    className={`w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${
+                      errors.roleName ? 'border-red-500' : 'border-gray-300'
+                    }`}
                 />
+                {errors.roleName && (
+                  <p className="text-sm text-red-600 mt-1">{errors.roleName}</p>
+                )}
             </div>
             <div className="flex items-center pt-8">
                 <label className="flex items-center gap-3 cursor-pointer select-none">
@@ -261,6 +347,16 @@ const AddRoleForm: React.FC<AddRoleFormProps> = ({ onCancel, onSuccess, role = n
                 </label>
             </div>
         </div>
+
+        {/* Permissions Error Message */}
+        {errors.permissions && (
+          <div className="flex items-center gap-2 p-3 bg-red-50 border border-red-200 rounded-lg">
+            <svg className="w-5 h-5 text-red-600 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path>
+            </svg>
+            <p className="text-sm text-red-600 font-medium">{errors.permissions}</p>
+          </div>
+        )}
 
         {/* Dual List Transfer - Responsive Grid Layout */}
         <div className="grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] gap-4 items-center h-auto min-h-[500px]">
@@ -422,6 +518,15 @@ const AddRoleForm: React.FC<AddRoleFormProps> = ({ onCancel, onSuccess, role = n
             )}
         </div>
       </div>
+      
+      {/* Toast Notification */}
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          type="success"
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 };

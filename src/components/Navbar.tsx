@@ -1,13 +1,29 @@
-  import React from 'react';
+  import React, { useState } from 'react';
   import { useNavigate } from 'react-router-dom';
   import { LayoutGrid, Briefcase, FileText, Users, CheckSquare, Settings, Bell, Search } from 'lucide-react';
+  import { useAppDispatch } from '../hooks/useAppDispatch';
+  import { Toast } from './Toast';
+  
 
   interface NavbarProps {
     userRole: 'admin' | 'user' | 'manager';
   }
 
   export const Navbar: React.FC<NavbarProps> = ({ userRole }) => {
+    const dispatch = useAppDispatch();  
     const navigate = useNavigate();
+    const [showToast, setShowToast] = useState(false);
+    const [isLoggingOut, setIsLoggingOut] = useState(false);
+
+    const handleLogout=()=>{
+      setIsLoggingOut(true);
+      setShowToast(true);
+      
+      setTimeout(() => {
+        dispatch({ type: "auth/logoutSuccess"});
+        navigate('/');
+      }, 1000);
+    }
 
     const navItems = [
       { label: 'Pipeline', icon: <LayoutGrid size={18} />, roles: ['admin', 'manager', 'user'], path: '/dashboard' },
@@ -19,7 +35,12 @@
     ];
 
     return (
-      <nav className="bg-white border-b border-gray-200 sticky top-0 z-30 w-full">
+      <nav className="bg-white border-b border-gray-200 sticky top-0 z-30 w-full relative">
+        {/* Blur overlay when logging out */}
+        {isLoggingOut && (
+          <div className="fixed inset-0 bg-white/40 backdrop-blur-[2px] z-40 pointer-events-auto" />
+        )}
+        
         <div className="px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between h-16 max-w-[1600px] mx-auto">
           
@@ -72,9 +93,15 @@
                 <span className="absolute top-2 right-2.5 w-2 h-2 bg-red-500 rounded-full border-2 border-white"></span>
               </button> */}
             
-              <div className="h-8 w-8 rounded-full bg-indigo-100 border border-indigo-200 flex items-center justify-center text-indigo-700 font-bold text-xs cursor-pointer">
-                JD
-              </div>
+          
+            <button
+  className="px-3 py-2 bg-black rounded-md text-white hover:text-gray-800 hover:bg-gray-100"
+  onClick={handleLogout}
+>
+  Log out
+</button>
+
+              
             </div>
           </div>
         </div>
@@ -89,6 +116,15 @@
              ))}
           </div>
         </div>
+        
+        {/* Toast Notification */}
+        {showToast && (
+          <Toast
+            message="Logged out successfully!"
+            type="success"
+            onClose={() => setShowToast(false)}
+          />
+        )}
       </nav>
     );
   };

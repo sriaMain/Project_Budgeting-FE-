@@ -1,36 +1,65 @@
-import react from "react";
-import { useAppNavigation } from "../hooks/useAppNavigation";
 import { Navigate } from "react-router-dom";
-import { useAppDispatch } from "../hooks/useAppDispatch";
 import { useAppSelector } from "../hooks/useAppSelector";
+import { useAppDispatch } from "../hooks/useAppDispatch";
+import { useEffect, useState } from "react";
+import { initializeAuth } from "../auth/authThunk";
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
-  allowedRoles: string[];
+  allowedRoles?: string[];
 }
 
 const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   children,
   allowedRoles,
 }) => {
-    const { goHome } = useAppNavigation();
-    const dispatch = useAppDispatch();
-    const authState = useAppSelector((state) => state.auth);
+  const dispatch = useAppDispatch();
+  const auth = useAppSelector((state) => state.auth);
 
-  
-  const userRole = authState.userRole;
-  const isAuthenticated= authState.isAuthenticated;
-  
-  if (!isAuthenticated) {
-    return <Navigate to="/" replace />
+  const [checking, setChecking] = useState(true);
 
+  useEffect(() => {
+    async function checkAuth() {
+      // No token → Force login
+      if (!auth.accessToken) {
+        setChecking(false);
+        return;
+      }
+
+      // Token exists but user not loaded → fetch user
+      if (!auth.isAuthenticated) {
+        try {
+          await dispatch(initializeAuth()).unwrap();
+        } catch (err) {
+          // Refresh failed, token invalid, etc
+          console.log("Auth initialization failed", err);
+        }
+      }
+
+      setChecking(false);
+    }
+
+    checkAuth();
+  }, [auth.accessToken]);
+
+  // Wait while checking token / refreshing
+  if (checking) {
+    return <div className="text-center p-4">Loading...</div>;
   }
 
-  // Check if user is authenticated and has the required role
-  if (isAuthenticated && userRole && allowedRoles.includes(userRole)) {
-    return <>{children}</>;
+  // No token and not authenticated → redirect to login
+  if (!auth.isAuthenticated) {
+    return <Navigate to="/" replace />;
   }
 
+  // Role check
+if (allowedRoles && auth.userRole && !allowedRoles.includes(auth.userRole)) {
   return <div>Access Denied</div>;
+}
+
+
+  // All good → show protected page
+  return <>{children}</>;
 };
+
 export default ProtectedRoute;

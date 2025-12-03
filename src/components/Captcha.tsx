@@ -2,7 +2,7 @@ import React, { useRef, useEffect, useCallback, useState } from 'react';
 import { RefreshIcon } from '../components/Icons';
 import type { CaptchaProps } from '../types';
 
-export const Captcha: React.FC<CaptchaProps> = ({ onCaptchaChange }) => {
+export const Captcha: React.FC<CaptchaProps> = ({ onCaptchaChange, refreshCounter }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [isRegenerating, setIsRegenerating] = useState(false);
 
@@ -94,6 +94,14 @@ export const Captcha: React.FC<CaptchaProps> = ({ onCaptchaChange }) => {
     regenerate();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
+
+  // Regenerate when parent increments refreshCounter
+  useEffect(() => {
+    if (typeof refreshCounter !== 'undefined') {
+      regenerate();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [refreshCounter]);
 
   return (
     <div className="flex items-center space-x-3 select-none">

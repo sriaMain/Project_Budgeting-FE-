@@ -1,19 +1,21 @@
 import axios from "axios";
 import store from "../store/store";
 
+
 const axiosRefresh = axios.create({
   baseURL:
-    import.meta.env.VITE_API_BASE_URL || "http://192.168.0.174:8000/api/",
+    import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/",
   withCredentials: true,
-  headers: { "Content-Type": "application/json" },
+ 
 });
 
 const axiosInstance = axios.create({
   baseURL:
-    import.meta.env.VITE_API_BASE_URL || "http://192.168.0.230:8000/api/",
+    import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/",
   withCredentials: true,
-  headers: { "Content-Type": "application/json" },
+
 });
+
 
 axiosInstance.interceptors.request.use((config) => {
   const token = store.getState().auth.accessToken;
@@ -53,7 +55,15 @@ axiosInstance.interceptors.response.use(
 
         return axiosInstance(originalRequest);
       } catch (err) {
+
+        store.dispatch({
+          type:"auth/logoutSuccess"
+
+        })
+      window.location.href = "/"
+      
         return Promise.reject(err);
+
       }
     }
 

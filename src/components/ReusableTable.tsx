@@ -67,7 +67,7 @@ export const ReusableTable = <T extends any>({
                         : (item[col.accessor] as React.ReactNode)}
                     </td>
                   ))}
-                  {(onEdit || onDelete) && (
+                
                     <td className="py-4 px-6">
                       <div className="flex items-center justify-center gap-2">
                         {onEdit && (
@@ -79,18 +79,10 @@ export const ReusableTable = <T extends any>({
                             <Edit3 size={16} />
                           </button>
                         )}
-                        {onDelete && (
-                          <button
-                            onClick={() => onDelete(item)}
-                            className="p-1.5 text-red-600 hover:bg-red-50 rounded-md transition-colors"
-                            title="Delete"
-                          >
-                            <Trash2 size={16} />
-                          </button>
-                        )}
+                       
                       </div>
                     </td>
-                  )}
+               
                 </tr>
               ))
             ) : (

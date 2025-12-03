@@ -10,13 +10,13 @@ import axiosInstance from "../utils/axiosInstance";
 import { useAppNavigation } from "../hooks/useAppNavigation";
 import { useDispatch } from "react-redux";
 import { parseApiErrors } from "../utils/parseApiErrors";
+import { Toast } from "../components/Toast";
 
 export const LoginForm: React.FC = () => {
   const [formData, setFormData] = useState<LoginFormData>({
     emailOrUsername: "",
     password: "",
-    rememberMe: false,
-    captchaInput: "",
+   captchaInput: "",
   });
 
   const [errors, setErrors] = useState<FormErrors>({});
@@ -25,6 +25,9 @@ export const LoginForm: React.FC = () => {
   const [loginSuccess, setLoginSuccess] = useState(false);
   const [captchaInput, setCaptchaInput] = useState("");
   const [captchaToken, setCaptchaToken] = useState("");
+  const [captchaRefreshCounter, setCaptchaRefreshCounter] = useState(0);
+  const [showToast, setShowToast] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const { goTo } = useAppNavigation();
   const dispatch = useDispatch();
 
@@ -78,8 +81,12 @@ export const LoginForm: React.FC = () => {
     // Captcha Validation
     if (!captchaInput) {
       newErrors.captcha = "Please enter the characters shown above";
+      // refresh captcha on missing input
+      setCaptchaRefreshCounter(c => c + 1);
     } else if (captchaInput !== captchaToken) {
       newErrors.captcha = "Incorrect characters. Please try again.";
+      // refresh captcha after incorrect attempt
+      setCaptchaRefreshCounter(c => c + 1);
     }
 
     setErrors(newErrors);
@@ -102,16 +109,22 @@ export const LoginForm: React.FC = () => {
       const response = await axiosInstance.post("/accounts/login/", payLoad);
 
       if (response.status === 200) {
-      goTo("/dashboard");
+        dispatch({ type: "auth/loginSuccess", payload: {isAuthenticated: true, userRole: response.data.role, accessToken: response.data.access_token }, });
+        
+        // Show toast and blur form, then navigate after brief delay
+        setIsNavigating(true);
+        setShowToast(true);
+        setTimeout(() => {
+          goTo("/dashboard");
+        }, 1800);
       }
-
-      dispatch({ type: "auth/loginSuccess", payload: {isAuthenticated: true, userRole: response.data.role, accessToken: response.data.access_token }, });
-      console.log("login succesfull");
-      // Here you would normally redirect or update global auth state
     }  catch (err: any) {
       const newErrors = parseApiErrors(err);
 
-      setErrors(newErrors);} finally {
+      setErrors(newErrors);
+      // On any failed login attempt from server, refresh captcha
+      setCaptchaRefreshCounter(c => c + 1);
+    } finally {
       setIsLoading(false);
     }
   };
@@ -141,7 +154,12 @@ export const LoginForm: React.FC = () => {
   }
 
   return (
-    <div className="w-full max-w-[480px] min-h-[600px] mx-auto bg-white">
+    <div className="w-full max-w-[480px] min-h-[600px] mx-auto bg-white relative">
+      {/* Blur overlay when navigating */}
+      {isNavigating && (
+        <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-10 pointer-events-auto" />
+      )}
+      
       {/* Header */}
       <div className="mb-12 text-center">
         <h1 className="text-3xl font-bold text-gray-900 tracking-tight">
@@ -202,7 +220,7 @@ export const LoginForm: React.FC = () => {
             Security Check
           </label>
           <div className="flex justify-center bg-gray-50 p-3 rounded-lg border border-gray-200">
-            <Captcha onCaptchaChange={handleCaptchaTokenChange} />
+            <Captcha onCaptchaChange={handleCaptchaTokenChange} refreshCounter={captchaRefreshCounter} />
           </div>
           <InputField
             label=""
@@ -221,14 +239,8 @@ export const LoginForm: React.FC = () => {
             Login
           </Button>
 
-          <div className="flex items-center justify-between">
-            <Checkbox
-              label="Remember Me"
-              name="rememberMe"
-              checked={formData.rememberMe}
-              onChange={handleChange}
-            />
-
+          <div className="flex items-center justify-end">
+        
             <Link
               to="/forgot-password"
               className="text-sm font-medium text-blue-500 hover:text-brand-800 hover:underline transition-colors"
@@ -239,6 +251,15 @@ export const LoginForm: React.FC = () => {
           </div>
         </div>
       </form>
+      
+      {/* Toast Notification */}
+      {showToast && (
+        <Toast
+          message="Login successful!"
+          type="success"
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 };

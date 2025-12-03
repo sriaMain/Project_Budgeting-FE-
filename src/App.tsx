@@ -8,6 +8,9 @@ import DashboardScreen from "./pages/DashboardScreen";
 import AdministrationScreen from "./pages/AdministrationScreen";
 import { useAppDispatch } from "./hooks/useAppDispatch";
 import { initializeAuth } from "./auth/authThunk";
+import ProtectedRoute from "./auth/ProtectedRoute";
+import { Contact } from "lucide-react";
+import ContactsScreen from "./pages/ContactsScreen";
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<string>("dashboard");
@@ -16,13 +19,9 @@ const App: React.FC = () => {
     setCurrentPage(page);
   };
 
-  const dispatch = useAppDispatch();
 
-  useEffect(() => {
-    // Run ONCE when the app loads
-    dispatch(initializeAuth());
-    
-  }, []);
+
+
 
   return (
     <main className="min-h-screen w-full flex items-center justify-center bg-white p-4 sm:p-6 lg:p-8">
@@ -32,27 +31,45 @@ const App: React.FC = () => {
 
           <Route path="/forgot-password" element={<ForgotPasswordForm />} />
           <Route path="/verification" element={<VerificationScreen />} />
-          <Route path="/create-password" element={<CreatePasswordScreen />} />
+              
+
+          {/* Protect Dashboard */}
           <Route
             path="/dashboard"
             element={
-              <DashboardScreen
-                userRole={userRole}
-                currentPage={currentPage}
-                onNavigate={handleNavigate}
-              />
+              <ProtectedRoute>
+                <DashboardScreen
+                  userRole={userRole}
+                  currentPage={currentPage}
+                  onNavigate={handleNavigate}
+                />
+              </ProtectedRoute>
             }
           />
+
+          {/* Protect Administration */}
           <Route
             path="/administration"
             element={
-              <AdministrationScreen
-                userRole={userRole}
-                currentPage={currentPage}
-                onNavigate={handleNavigate}
-              />
+              <ProtectedRoute>
+                <AdministrationScreen
+                  userRole={userRole}
+                  currentPage={currentPage}
+                  onNavigate={handleNavigate}
+                />
+              </ProtectedRoute>
             }
           />
+          <Route path="/contacts" element={
+            <ProtectedRoute>
+              <ContactsScreen
+             
+              />
+            </ProtectedRoute>
+          } />
+          <Route path="/create-password" element={<CreatePasswordScreen />} />
+          
+        
         </Routes>
       </BrowserRouter>
     </main>

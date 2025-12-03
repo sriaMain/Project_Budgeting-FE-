@@ -1,21 +1,24 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Search, ArrowLeft, Save, Loader2 } from "lucide-react";
-import { ReusableTable } from "../components/ReusableTable";
+import { ReusableTable} from "../components/ReusableTable";
 import type { Column } from "../components/ReusableTable";
-import AddProductGroupModal from "../components/AddProductGroupModal";
+import AddProductGroupModal from "./AddProductGroupModal";
 import axiosInstance from "../utils/axiosInstance";
+import { Toast } from "./Toast";
+import { parseApiErrors } from "../utils/parseApiErrors";
 
 // --- Types ---
 interface ProductGroup {
-  id: string;
-  name: string;
+  id: number; // Based on your JSON: "id": 1
+  product_group: string;
 }
 
 interface ModuleItem {
   id: string;
   description: string;
-product_service_name: string;
-product_group: string;
+  product_service_name: string;
+  product_group: string; // API returns string: "Services"
+  product_group_id?: number; // Derived: We find this ID by matching the string
 }
 
 // --- Modules Tab Component ---
@@ -29,48 +32,64 @@ const ModulesTab: React.FC = () => {
     id: "",
     product_service_name: "",
     description: "",
-    product_group: "",
+    product_group: "", // Stores the ID selected from dropdown as a string
   });
 
   // Dropdown Data
   const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
+  const [showToast, setShowToast] = useState(false);
+  const [toastMessage, setToastMessage] = useState("");
+  const [isNavigating, setIsNavigating] = useState(false);
+  const [errors, setErrors] = useState<{ general?: string }>({});
 
   // Initial Fetch
   useEffect(() => {
-    fetchModules();
-    fetchProductGroups();
+    fetchData();
   }, []);
 
-  const fetchModules = async () => {
+  // Clear errors when switching to list view
+  useEffect(() => {
+    if (view === 'list') {
+      setErrors({});
+    }
+  }, [view]);
+
+  const fetchData = async () => {
     setIsLoading(true);
     try {
-      const res = await axiosInstance.get("/product-services/");
-      setModules(res.data);
+      // Fetch both simultaneously to ensure we have groups for mapping
+      const [groupsRes, modulesRes] = await Promise.all([
+        axiosInstance.get("/product-groups"),
+        axiosInstance.get("/product-services/"),
+      ]);
 
-      console.log("Modules fetched:", res.data);
-      // Mock Data
+      const groups: ProductGroup[] = groupsRes.data;
+      const rawModules: ModuleItem[] = modulesRes.data;
+
+      console.log("Product Groups fetched:", groups);
+      console.log("Modules fetched (raw):", rawModules);
+
+      setProductGroups(groups);
+
+      // Map modules to include the derived ID
+      const modulesWithIds = rawModules.map((mod) => {
+        // Find the group object that matches the module's string name
+        const matchingGroup = groups.find(
+          (g) => g.product_group === mod.product_group
+        );
+        return {
+          ...mod,
+          product_group_id: matchingGroup ? matchingGroup.id : undefined,
+        };
+      });
+
+      setModules(modulesWithIds);
     } catch (error) {
-      console.error("Failed to fetch modules", error);
+      console.error("Failed to fetch data", error);
     } finally {
       setIsLoading(false);
-    }
-  };
-
-  const fetchProductGroups = async () => {
-    try {
-      // const res = await axiosInstance.get('/product-groups');
-      // setProductGroups(res.data);
-
-      // Mock Data
-      setProductGroups([
-        { id: "101", name: "Finance" },
-        { id: "102", name: "Sales" },
-        { id: "103", name: "HR" },
-      ]);
-    } catch (error) {
-      console.error("Failed to fetch groups", error);
     }
   };
 
@@ -80,17 +99,43 @@ const ModulesTab: React.FC = () => {
 
     setIsSaving(true);
     try {
+      // Build payload with product_group as the group ID (Integer)
+      const payload = {
+        id: formData.id,
+        product_service_name: formData.product_service_name,
+        description: formData.description,
+        product_group: parseInt(formData.product_group, 10), // Send ID
+      };
+
       // API Call
-      if (formData.id) await axiosInstance.put(`/modules/${formData.id}`, formData);
-      else await axiosInstance.post('/product-services/', formData);
+      if (formData.id) {
+        await axiosInstance.put(`/product-services/${formData.id}/`, payload);
+      } else {
+        await axiosInstance.post("/product-services/", payload);
+      }
 
-      await new Promise((r) => setTimeout(r, 1000)); // Mock delay
+      await new Promise((r) => setTimeout(r, 1000)); // Delay for UX
 
-      await fetchModules(); // Refresh list
-      setView("list");
-      setFormData({ id: "", product_service_name: "", description: "", product_group: "" });
+      await fetchData(); // Refresh list and re-map
+      
+      // Show toast and navigate back after delay
+      setIsNavigating(true);
+      setToastMessage(formData.id ? "Module updated successfully!" : "Module created successfully!");
+      setShowToast(true);
+      setTimeout(() => {
+        setView("list");
+        setFormData({
+          id: "",
+          product_service_name: "",
+          description: "",
+          product_group: "",
+        });
+        setErrors({});
+        setIsNavigating(false);
+      }, 1800);
     } catch (error) {
-      console.error("Error saving module", error);
+      const apiErrors = parseApiErrors(error);
+      setErrors(apiErrors);
     } finally {
       setIsSaving(false);
     }
@@ -102,7 +147,10 @@ const ModulesTab: React.FC = () => {
       accessor: "product_service_name",
       className: "font-medium text-gray-900",
     },
-    { header: "Product Group", accessor: "product_group" },
+    {
+      header: "Product Group",
+      accessor: "product_group", // Display the string directly
+    },
     { header: "Description", accessor: "description" },
   ];
 
@@ -113,8 +161,20 @@ const ModulesTab: React.FC = () => {
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}
         onSuccess={(newGroup) => {
-          setProductGroups((prev) => [...prev, newGroup]);
-          setFormData((prev) => ({ ...prev, productGroupId: newGroup.id })); // Auto-select new group
+          // Add new group to list and auto-select it
+          // Note: ensure newGroup has the correct shape if coming from modal
+          // Assuming modal returns { id: string, name: string } or similar
+          // We convert it to our ProductGroup type
+          const mappedGroup: ProductGroup = {
+            id: Number(newGroup.id),
+            product_group: newGroup.product_group,
+          };
+
+          setProductGroups((prev) => [...prev, mappedGroup]);
+          setFormData((prev) => ({
+            ...prev,
+            product_group: String(mappedGroup.id),
+          }));
         }}
       />
 
@@ -155,21 +215,38 @@ const ModulesTab: React.FC = () => {
             columns={columns}
             keyField="id"
             isLoading={isLoading}
-            onEdit={(item) => {
+            onEdit={(item: ModuleItem) => {
+              // Logic: We need the ID for the dropdown.
+              // We derived product_group_id during fetch.
+              const groupIdForForm = item.product_group_id
+                ? String(item.product_group_id)
+                : "";
+
+              if (!groupIdForForm) {
+                console.warn(
+                  "Could not find matching Product Group ID for:",
+                  item.product_group
+                );
+              }
+
               setFormData({
                 id: item.id,
                 product_service_name: item.product_service_name,
                 description: item.description,
-                product_group: item.product_group,
+                product_group: groupIdForForm,
               });
               setView("form");
             }}
-            onDelete={(item) => console.log("Delete", item.id)}
           />
         </div>
       ) : (
-        /* --- Form View (Matches your Image) --- */
-        <div className="max-w-4xl mx-auto">
+        /* --- Form View --- */
+        <div className="max-w-4xl mx-auto relative">
+          {/* Blur overlay when navigating */}
+          {isNavigating && (
+            <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-10 pointer-events-auto rounded-xl" />
+          )}
+          
           {/* Breadcrumb / Back */}
           <div className="mb-6 flex items-center gap-2 text-sm">
             <button
@@ -189,6 +266,15 @@ const ModulesTab: React.FC = () => {
               Module Details
             </h3>
 
+            {errors.general && (
+              <div className="mt-4 p-4 bg-red-50 border border-red-100 text-red-600 text-sm rounded-lg flex items-center">
+                <svg className="w-5 h-5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4m0 4h.01M21 12a9 9 0 1 1-18 0 9 9 0 0 1 18 0z"></path>
+                </svg>
+                {errors.general}
+              </div>
+            )}
+
             <form onSubmit={handleSave} className="space-y-6">
               {/* Product/Module Name */}
               <div className="space-y-2">
@@ -200,9 +286,13 @@ const ModulesTab: React.FC = () => {
                   type="text"
                   required
                   value={formData.product_service_name}
-                  onChange={(e) =>
-                    setFormData({ ...formData, product_service_name: e.target.value })
-                  }
+                  onChange={(e) => {
+                    setFormData({
+                      ...formData,
+                      product_service_name: e.target.value,
+                    });
+                    setErrors({});
+                  }}
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all placeholder-gray-400"
                   placeholder="Enter module name"
                 />
@@ -254,7 +344,7 @@ const ModulesTab: React.FC = () => {
                           value={group.id}
                           className="text-gray-900"
                         >
-                          {group.name}
+                          {group.product_group}
                         </option>
                       ))}
                     </select>
@@ -307,6 +397,15 @@ const ModulesTab: React.FC = () => {
             </form>
           </div>
         </div>
+      )}
+      
+      {/* Toast Notification */}
+      {showToast && (
+        <Toast
+          message={toastMessage}
+          type="success"
+          onClose={() => setShowToast(false)}
+        />
       )}
     </div>
   );

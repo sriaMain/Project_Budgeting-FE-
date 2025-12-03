@@ -4,6 +4,8 @@ import { Button } from "../components/Button";
 import { PasswordRequirements } from "../components/PasswordRequirements";
 import { Lock, ShieldCheck, Stars } from "lucide-react";
 import axiosInstance from "../utils/axiosInstance";
+import { Toast } from "../components/Toast";
+import { useAppNavigation } from "../hooks/useAppNavigation";
 
 const CreatePasswordScreen: React.FC = () => {
   const [password, setPassword] = useState("");
@@ -12,6 +14,9 @@ const CreatePasswordScreen: React.FC = () => {
   const [errors, setErrors] = useState<{ password?: string; confirm?: string }>(
     {}
   );
+  const [showToast, setShowToast] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
+  const { goTo } = useAppNavigation();
 
   // Validation Rules (replicated from Requirements for logic check)
   const isPasswordValid = (p: string) =>
@@ -52,7 +57,14 @@ const CreatePasswordScreen: React.FC = () => {
       });
       if (response.status === 200) {
         setIsLoading(false);
-        alert("Password reset successfully!");
+        localStorage.removeItem("reset_token");
+        
+        // Show toast and navigate after delay
+        setIsNavigating(true);
+        setShowToast(true);
+        setTimeout(() => {
+          goTo("/");
+        }, 1800);
       }
     } catch (error: any) {
       setErrors({ password: "Failed to reset password. Please try again." });
@@ -60,7 +72,12 @@ const CreatePasswordScreen: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen w-full bg-white flex overflow-hidden">
+    <div className="min-h-screen w-full bg-white flex overflow-hidden relative">
+      {/* Blur overlay when navigating */}
+      {isNavigating && (
+        <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-50 pointer-events-auto" />
+      )}
+      
       {/* Left Side - Illustration (Hidden on Mobile) */}
       <div className="hidden lg:flex lg:w-1/2 bg-indigo-50 relative items-center justify-center p-12 overflow-hidden">
         {/* Abstract Background Shapes */}
@@ -157,6 +174,15 @@ const CreatePasswordScreen: React.FC = () => {
           </form>
         </div>
       </div>
+      
+      {/* Toast Notification */}
+      {showToast && (
+        <Toast
+          message="Password reset successfully!"
+          type="success"
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 };

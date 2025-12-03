@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
 import { X, Loader2 } from 'lucide-react';
 import axiosInstance from '../utils/axiosInstance'; // Assuming you have this
+import { Toast } from './Toast';
 
 interface AddProductGroupModalProps {
   isOpen: boolean;
   onClose: () => void;
-  onSuccess: (newGroup: { id: string; name: string }) => void;
+  onSuccess: (newGroup: { id: string; product_group: string }) => void;
 }
 
 const AddProductGroupModal: React.FC<AddProductGroupModalProps> = ({ isOpen, onClose, onSuccess }) => {
   const [groupName, setGroupName] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [showToast, setShowToast] = useState(false);
+  const [isClosing, setIsClosing] = useState(false);
 
   if (!isOpen) return null;
 
@@ -26,14 +29,22 @@ const AddProductGroupModal: React.FC<AddProductGroupModalProps> = ({ isOpen, onC
       // API call to create product group
        const response = await axiosInstance.post('/product-groups/', {product_group_name: groupName });
       
+       const newGroup = response.data;
        console.log("API response:", response);
       // MOCK RESPONSE for demonstration
-      await new Promise(resolve => setTimeout(resolve, 800));
-      const mockResponse = { id: Date.now().toString(), name: groupName };
+      // await new Promise(resolve => setTimeout(resolve, 800));
+      // const mockResponse = { id: Date.now().toString(), product_group: groupName };
       
-      onSuccess(mockResponse);
+      onSuccess(newGroup);
       setGroupName('');
-      onClose();
+      
+      // Show toast and close after delay
+      setIsClosing(true);
+      setShowToast(true);
+      setTimeout(() => {
+        onClose();
+        setIsClosing(false);
+      }, 1800);
     } catch (err) {
       setError('Failed to create product group. Please try again.');
     } finally {
@@ -43,7 +54,12 @@ const AddProductGroupModal: React.FC<AddProductGroupModalProps> = ({ isOpen, onC
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in duration-200">
-      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 transform transition-all scale-100 p-6">
+      <div className="bg-white rounded-xl shadow-xl w-full max-w-md mx-4 transform transition-all scale-100 p-6 relative">
+        {/* Blur overlay when closing */}
+        {isClosing && (
+          <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-10 pointer-events-auto rounded-xl" />
+        )}
+        
         <div className="flex justify-between items-center mb-6">
           <h3 className="text-xl font-bold text-gray-800">Add Product Group</h3>
           <button onClick={onClose} className="text-gray-400 hover:text-gray-600 transition-colors">
@@ -85,6 +101,15 @@ const AddProductGroupModal: React.FC<AddProductGroupModalProps> = ({ isOpen, onC
             </button>
           </div>
         </form>
+        
+        {/* Toast Notification */}
+        {showToast && (
+          <Toast
+            message="Product group created successfully!"
+            type="success"
+            onClose={() => setShowToast(false)}
+          />
+        )}
       </div>
     </div>
   );

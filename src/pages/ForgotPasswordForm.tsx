@@ -7,12 +7,15 @@ import axios from "axios";
 import axiosInstance from "../utils/axiosInstance";
 import type { FormErrors } from "../types";
 import { parseApiErrors } from "../utils/parseApiErrors";
+import { Toast } from "../components/Toast";
 
 export const ForgotPasswordForm: React.FC = () => {
   const [email, setEmail] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState("");
+  const [showToast, setShowToast] = useState(false);
+  const [isNavigating, setIsNavigating] = useState(false);
   const { goBack, goTo } = useAppNavigation();
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -33,13 +36,37 @@ export const ForgotPasswordForm: React.FC = () => {
     try {
       // Simulate API
       const response = await axiosInstance.post("/accounts/otp-request/", {
-        gmail: email,
+        email: email,
       });
 
       if (response.status === 200) {
-        // Pass the email to the verification screen via query param
-        const encoded = encodeURIComponent(email);
-        goTo(`/verification?email=${encoded}`);
+
+        // Prefer server-provided otp timestamp but always set a resend cutoff
+        const serverOtpSentAt = response.data?.otp_sent_at;
+
+        // Normalize and store otp_sent_at (store ms if server gave seconds)
+        if (serverOtpSentAt) {
+          let sentAt = parseInt(serverOtpSentAt as string);
+          if (!Number.isNaN(sentAt) && sentAt < 1e12) sentAt = sentAt * 1000;
+          localStorage.setItem("otp_sent_at", sentAt.toString());
+        } else {
+          localStorage.setItem("otp_sent_at", Date.now().toString());
+        }
+
+        // Set explicit resend cutoff timestamp (ms). This ensures VerificationScreen starts timer.
+        const resendCutoff = Date.now() + 60 * 1000;
+        localStorage.setItem("otp_resend_at", resendCutoff.toString());
+
+        // Save the email as well for convenience
+        localStorage.setItem("otp_email", email);
+
+        // Show toast and navigate after delay
+        setIsNavigating(true);
+        setShowToast(true);
+        setTimeout(() => {
+          const encoded = encodeURIComponent(email);
+          goTo(`/verification?email=${encoded}`);
+        }, 1800);
       }
     } catch (err: any) {
           const newErrors = parseApiErrors(err);
@@ -76,7 +103,12 @@ export const ForgotPasswordForm: React.FC = () => {
   //   }
 
   return (
-    <div className="flex flex-col md:flex-row w-full max-w-4xl mx-auto bg-white rounded-2xl  overflow-hidden min-h-[600px] animate-fadeIn">
+    <div className="flex flex-col md:flex-row w-full max-w-4xl mx-auto bg-white rounded-2xl  overflow-hidden min-h-[600px] animate-fadeIn relative">
+      {/* Blur overlay when navigating */}
+      {isNavigating && (
+        <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-10 pointer-events-auto" />
+      )}
+      
       {/* Image Side */}
       <div
         className="hidden md:block w-full md:w-1/2 bg-cover bg-center relative"
@@ -127,6 +159,15 @@ export const ForgotPasswordForm: React.FC = () => {
           </form>
         </div>
       </div>
+      
+      {/* Toast Notification */}
+      {showToast && (
+        <Toast
+          message="OTP sent successfully!"
+          type="success"
+          onClose={() => setShowToast(false)}
+        />
+      )}
     </div>
   );
 };

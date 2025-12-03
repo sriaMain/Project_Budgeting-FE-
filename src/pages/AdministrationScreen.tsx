@@ -133,7 +133,7 @@ const AdministrationScreen: React.FC<AdministrationScreenProps> = ({ userRole, c
     setError(null);
     
     try {
-      const response = await axiosInstance.get('/roles/roles');
+      const response = await axiosInstance.get('/roles/roles/');
       
       if (response.status === 200 && Array.isArray(response.data)) {
         setRoles(response.data);
