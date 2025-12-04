@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, {  useState } from "react";
 import { LoginForm } from "./pages/LoginForm";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ForgotPasswordForm } from "./pages/ForgotPasswordForm";
@@ -6,10 +6,9 @@ import VerificationScreen from "./pages/VerificationScreen";
 import CreatePasswordScreen from "./pages/CreatePasswordScreen";
 import DashboardScreen from "./pages/DashboardScreen";
 import AdministrationScreen from "./pages/AdministrationScreen";
-import { useAppDispatch } from "./hooks/useAppDispatch";
-import { initializeAuth } from "./auth/authThunk";
+
 import ProtectedRoute from "./auth/ProtectedRoute";
-import { Contact } from "lucide-react";
+
 import ContactsScreen from "./pages/ContactsScreen";
 
 const App: React.FC = () => {
