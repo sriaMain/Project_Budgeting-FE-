@@ -1,5 +1,6 @@
 import { createAsyncThunk } from "@reduxjs/toolkit";
 import axiosInstance from "../utils/axiosInstance";
+import axiosRefresh from "../utils/axiosInstance";
 
 
 interface   InitializeAuthResponse {
@@ -17,14 +18,14 @@ export const initializeAuth = createAsyncThunk<
   async (_, thunkAPI) => {
     try {
       console.log("Initializing Auth");
-      const response = await axiosInstance.post("/accounts/refresh/");
+      const response = await axiosRefresh.post("/accounts/refresh/", {}, { withCredentials: true });
+
       console.log("Auth Initialized:", response.data);
      
-        return {
-          isAuthenticated: true,
-          userRole: response.data.role,
-          accessToken: response.data.token,
-        
+      return {
+        isAuthenticated: true,
+        userRole: response.data.role,
+        accessToken: response.data.access_token,
       }
     } catch (error) {
     

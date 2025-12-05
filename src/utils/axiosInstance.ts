@@ -43,7 +43,8 @@ axiosInstance.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const response = await axiosRefresh.post("/accounts/refresh/");
+        const response = await axiosRefresh.post("/accounts/refresh/",{ withCredentials: true })
+        ;
 
         store.dispatch({
           type: "auth/setAccessToken",

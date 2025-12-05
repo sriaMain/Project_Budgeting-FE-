@@ -1,4 +1,4 @@
-import React, {  useState } from "react";
+import React, {  useEffect, useState } from "react";
 import { LoginForm } from "./pages/LoginForm";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ForgotPasswordForm } from "./pages/ForgotPasswordForm";
@@ -10,6 +10,7 @@ import AdministrationScreen from "./pages/AdministrationScreen";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
 import ContactsScreen from "./pages/ContactsScreen";
+import { initializeAuth } from "./auth/authThunk";
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<string>("dashboard");
@@ -18,6 +19,17 @@ const App: React.FC = () => {
     setCurrentPage(page);
   };
 
+  useEffect(() => {
+    console.log("🍪 [APP MOUNT] Checking cookies on app load:");
+    console.log("   document.cookie:", document.cookie);
+    console.log("   All cookies:", document.cookie ? document.cookie.split('; ') : "No cookies found");
+    console.log("   Cookie count:", document.cookie ? document.cookie.split('; ').length : 0);
+    
+    console.log("App mounted, initializing auth...");
+    
+    initializeAuth();
+    console.log("Auth initialization dispatched.");
+  }, []);
 
 
 

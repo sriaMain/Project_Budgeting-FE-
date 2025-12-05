@@ -9,28 +9,29 @@ import { parseApiErrors } from "../utils/parseApiErrors";
 
 
 interface AddClientProps {
+  client?: Client;
   onSave: (client: Client) => void;
   onCancel: () => void;
 }
 
-export function AddClientPage({ onSave, onCancel }: AddClientProps) {
+export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
   const [tags, setTags] = useState<CompanyTag[]>([]);
   const [loadingTags, setLoadingTags] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<{ general?: string }>({});
   
   const [formData, setFormData] = useState({
-    company_name: '',
-    mobile_number: '',
-    email: '',
-    gstin: '',
-    street_address: '',
-    city: '',
-    postal_code: '',
-    municipality: '',
-    state: '',
-    country: '',
-    selectedTags: [] as number[]
+    company_name: client?.company_name || '',
+    mobile_number: client?.mobile_number || '',
+    email: client?.email || '',
+    gstin: client?.gstin || '',
+    street_address: client?.street_address || '',
+    city: client?.city || '',
+    postal_code: client?.postal_code || '',
+    municipality: client?.municipality || '',
+    state: client?.state || '',
+    country: client?.country || '',
+    selectedTags: client?.tags?.map(t => t.id) || [] as number[]
   });
 
   // Fetch Tags directly in the component
@@ -84,18 +85,17 @@ export function AddClientPage({ onSave, onCancel }: AddClientProps) {
 
     try {
 
-        const response = await axiosInstance.post("/client/", payload);
-        if (response.status === 201) {
-          console.log("Client created:", response.data);
+        const response = client 
+          ? await axiosInstance.put(`/client/${client.id}/`, payload)
+          : await axiosInstance.post("/client/", payload);
+        if (response.status === 201 || response.status === 200) {
+          console.log("Client saved:", response.data);
         }
  
       const savedClient: Client = {
-        ...payload,
+        ...response.data,
         // for UI, convert tag ids back to tag objects
-        tags: tags.filter(t => formData.selectedTags.includes(t.id)),
-        id: Math.floor(Math.random() * 1000) + 1,
-        created_at: new Date().toISOString(),
-        updated_at: new Date().toISOString()
+        tags: tags.filter(t => formData.selectedTags.includes(t.id))
       };
       
       onSave(savedClient);
@@ -118,7 +118,7 @@ export function AddClientPage({ onSave, onCancel }: AddClientProps) {
            Contacts
          </button>
          <span className="text-gray-400">/</span>
-         <span className="text-gray-700 font-medium">Add New Client</span>
+         <span className="text-gray-700 font-medium">{client ? 'Edit Client' : 'Add New Client'}</span>
        </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
@@ -309,7 +309,7 @@ export function AddClientPage({ onSave, onCancel }: AddClientProps) {
               disabled={isSaving}
               className={`px-8 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-md hover:shadow-lg transform active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isSaving ? 'opacity-70' : ''}`}
             >
-              {isSaving ? 'Saving...' : 'Save'}
+              {isSaving ? 'Saving...' : client ? 'Update Client' : 'Create Client'}
             </button>
           </div>
         </form>

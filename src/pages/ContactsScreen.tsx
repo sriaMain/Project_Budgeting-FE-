@@ -8,7 +8,7 @@ import axiosInstance from "../utils/axiosInstance";
 
 
 export default function ContactsScreen() {
-  const [currentView, setCurrentView] = useState<'list' | 'add' | 'details'>('list');
+  const [currentView, setCurrentView] = useState<'list' | 'add' | 'details' | 'edit'>('list');
   const [selectedClientId, setSelectedClientId] = useState<number | null>(null);
 
   // Application State - Clients
@@ -65,6 +65,16 @@ export default function ContactsScreen() {
     handleNavigateToDetails(newClient.id);
   };
 
+  const handleClientUpdated = (updatedClient: Client) => {
+    setClients(prev => prev.map(c => c.id === updatedClient.id ? updatedClient : c));
+    handleNavigateToDetails(updatedClient.id);
+  };
+
+  const handleEditClient = (clientId: number) => {
+    setSelectedClientId(clientId);
+    setCurrentView('edit');
+  };
+
   const handlePOCCreated = (newPOC: POC) => {
     setPocs(prev => [...prev, newPOC]);
   };
@@ -91,11 +101,20 @@ export default function ContactsScreen() {
             />
           )}
 
+          {currentView === 'edit' && selectedClientId && (
+            <AddClientPage 
+              client={getClientById(selectedClientId)}
+              onSave={handleClientUpdated} 
+              onCancel={() => setCurrentView('details')}
+            />
+          )}
+
           {currentView === 'details' && selectedClientId && (
             <ClientDetailsPage 
               client={getClientById(selectedClientId)!}
               pocs={getPocsByClientId(selectedClientId)}
               onAddPOC={handlePOCCreated}
+              onEdit={() => handleEditClient(selectedClientId)}
               onBack={() => setCurrentView('list')}
             />
           )}

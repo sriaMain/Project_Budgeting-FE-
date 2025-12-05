@@ -8,10 +8,11 @@ interface ClientDetailsProps {
   client: Client;
   pocs: POC[];
   onAddPOC: (poc: POC) => void;
+  onEdit: () => void;
   onBack: () => void;
 }
 
-export function ClientDetailsPage({ client, pocs, onAddPOC, onBack }: ClientDetailsProps) {
+export function ClientDetailsPage({ client, pocs, onAddPOC, onEdit, onBack }: ClientDetailsProps) {
   const [isPOCModalOpen, setIsPOCModalOpen] = useState(false);
 
   return (
@@ -31,7 +32,10 @@ export function ClientDetailsPage({ client, pocs, onAddPOC, onBack }: ClientDeta
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-3xl font-bold text-gray-900">{client.company_name}</h2>
-        <button className="px-6 py-2.5 text-blue-600 font-semibold border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors">
+        <button 
+          onClick={onEdit}
+          className="px-6 py-2.5 text-blue-600 font-semibold border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+        >
           Modify
         </button>
       </div>
@@ -112,7 +116,7 @@ export function ClientDetailsPage({ client, pocs, onAddPOC, onBack }: ClientDeta
       </div>
 
       {/* Quotes Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
           <h3 className="font-bold text-gray-900 text-sm">Quotes</h3>
           <button className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded-md font-semibold transition-colors">
@@ -151,10 +155,10 @@ export function ClientDetailsPage({ client, pocs, onAddPOC, onBack }: ClientDeta
           <span>Successful Quotes: 10,000</span>
           <span>Total: 10,000</span>
         </div>
-      </div>
+      </div> */}
 
       {/* Files Section */}
-      <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
+      {/* <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
         <div className="p-4 border-b bg-gray-50 flex justify-between items-center">
           <h3 className="font-bold text-gray-900 text-sm">Files</h3>
           <button className="bg-blue-600 hover:bg-blue-700 text-white text-xs px-3 py-1 rounded-md font-semibold transition-colors flex items-center gap-1">
@@ -164,7 +168,7 @@ export function ClientDetailsPage({ client, pocs, onAddPOC, onBack }: ClientDeta
         <div className="p-8 text-center text-gray-400 text-sm">
           No files uploaded yet.
         </div>
-      </div>
+      </div> */}
 
       {/* POC Modal */}
       {isPOCModalOpen && (
