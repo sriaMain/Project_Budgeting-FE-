@@ -10,6 +10,8 @@ import AdministrationScreen from "./pages/AdministrationScreen";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
 import ContactsScreen from "./pages/ContactsScreen";
+import PipelineScreen from "./pages/PipelineScreen";
+import AddQuotePage from "./pages/AddQuotePage";
 import { initializeAuth } from "./auth/authThunk";
 
 const App: React.FC = () => {
@@ -20,15 +22,10 @@ const App: React.FC = () => {
   };
 
   useEffect(() => {
-    console.log("🍪 [APP MOUNT] Checking cookies on app load:");
-    console.log("   document.cookie:", document.cookie);
-    console.log("   All cookies:", document.cookie ? document.cookie.split('; ') : "No cookies found");
-    console.log("   Cookie count:", document.cookie ? document.cookie.split('; ').length : 0);
-    
     console.log("App mounted, initializing auth...");
     
     initializeAuth();
-    console.log("Auth initialization dispatched.");
+   console.log("Auth initialization dispatched.");
   }, []);
 
 
@@ -78,6 +75,31 @@ const App: React.FC = () => {
               />
             </ProtectedRoute>
           } />
+          
+          {/* Protect Pipeline */}
+          <Route
+            path="/pipeline"
+            element={
+              <ProtectedRoute>
+                <PipelineScreen
+                  userRole={userRole}
+                  currentPage={currentPage}
+                  onNavigate={handleNavigate}
+                />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protect Add Quote */}
+          <Route
+            path="/pipeline/add-quote"
+            element={
+              <ProtectedRoute>
+                <AddQuotePage />
+              </ProtectedRoute>
+            }
+          />
+          
           <Route path="/create-password" element={<CreatePasswordScreen />} />
           
         

@@ -26,7 +26,7 @@
     }
 
     const navItems = [
-      { label: 'Pipeline', icon: <LayoutGrid size={18} />, roles: ['admin', 'manager', 'user'], path: '/dashboard' },
+      { label: 'Pipeline', icon: <LayoutGrid size={18} />, roles: ['admin', 'manager', 'user'], path: '/pipeline' },
       { label: 'Projects', icon: <Briefcase size={18} />, roles: ['admin', 'manager', 'user'], path: '/projects' },
       { label: 'Reports', icon: <FileText size={18} />, roles: ['admin', 'manager'], path: '/reports' },
       { label: 'Contacts', icon: <Users size={18} />, roles: ['admin', 'manager', 'user'], path: '/contacts' },
