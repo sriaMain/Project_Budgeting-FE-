@@ -6,6 +6,7 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Trash2, GripVertical, ChevronDown } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useSelector } from 'react-redux';
 import { Layout } from '../components/Layout';
 import { AddClientModal } from '../components/AddClientModal';
 import ModulesTab from '../components/ModulesTab';
@@ -84,6 +85,14 @@ interface UnitChoice {
 
 export default function AddQuotePage() {
   const navigate = useNavigate();
+  const username = useSelector((state: any) => state.auth.username);
+  
+  // Get today's date in YYYY-MM-DD format
+  const getTodayDate = () => {
+    const today = new Date();
+    return today.toISOString().split('T')[0];
+  };
+  
   const [clients, setClients] = useState<Client[]>([]);
   const [productGroups, setProductGroups] = useState<ProductGroup[]>([]);
   const [services, setServices] = useState<Service[]>([]);
@@ -96,9 +105,9 @@ export default function AddQuotePage() {
   const [isAddServiceModalOpen, setIsAddServiceModalOpen] = useState(false);
 
   const [quoteDetails, setQuoteDetails] = useState({
-    author: 'Vignesh Kumar',
-    dateOfIssue: '2025-10-25',
-    dueDate: '2025-10-25',
+    author: username || '',
+    dateOfIssue: getTodayDate(),
+    dueDate: getTodayDate(),
     client: '',
     poc: '',
     status: '',
@@ -123,6 +132,16 @@ export default function AddQuotePage() {
   useEffect(() => {
     initializeData();
   }, []);
+
+  // Update author when username loads from Redux
+  useEffect(() => {
+    if (username) {
+      setQuoteDetails(prev => ({
+        ...prev,
+        author: username
+      }));
+    }
+  }, [username]);
 
   /**
    * Initialize all data fetching in parallel for optimal performance

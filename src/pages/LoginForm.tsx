@@ -109,7 +109,19 @@ export const LoginForm: React.FC = () => {
       const response = await axiosInstance.post("/accounts/login/", payLoad);
 
       if (response.status === 200) {
-        dispatch({ type: "auth/loginSuccess", payload: {isAuthenticated: true, userRole: response.data.role, accessToken: response.data.access_token }, });
+        // Map roles array to userRole (take first role and convert to lowercase)
+        const userRole = response.data.user.roles[0]?.toLowerCase() || 'user';
+        
+        dispatch({ 
+          type: "auth/loginSuccess", 
+          payload: {
+            isAuthenticated: true, 
+            userRole: userRole, 
+            accessToken: response.data.access_token,
+            username: response.data.user.username,
+            email: response.data.user.email,
+          }, 
+        });
         
         // Show toast and blur form, then navigate after brief delay
         setIsNavigating(true);

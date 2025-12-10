@@ -6,6 +6,8 @@ interface   InitializeAuthResponse {
   isAuthenticated: boolean;
   userRole: "admin" | "user" | "manager";
   accessToken: string;
+  username: string;
+  email: string;
 }
 
 export const initializeAuth = createAsyncThunk<
@@ -24,8 +26,9 @@ export const initializeAuth = createAsyncThunk<
           isAuthenticated: true,
           userRole: response.data.role,
           accessToken: response.data.token,
-        
-      }
+          username: response.data.username || '',
+          email: response.data.email || '',
+        };
     } catch (error) {
     
       return thunkAPI.rejectWithValue(
