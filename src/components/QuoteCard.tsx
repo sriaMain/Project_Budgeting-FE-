@@ -13,6 +13,19 @@ interface QuoteCardProps {
 }
 
 export const QuoteCard: React.FC<QuoteCardProps> = ({ quote, onClick }) => {
+  // Format date for display
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    return date.toLocaleDateString('en-GB', { 
+      day: '2-digit', 
+      month: 'short', 
+      year: 'numeric' 
+    });
+  };
+
+  // Parse quote value safely
+  const quoteValue = parseFloat(quote.quote_value) || 0;
+
   return (
     <div
       onClick={() => onClick?.(quote)}
@@ -24,28 +37,28 @@ export const QuoteCard: React.FC<QuoteCardProps> = ({ quote, onClick }) => {
           <Building2 className="w-4 h-4 text-gray-400" />
           <span className="font-semibold text-gray-900 text-sm">{quote.client_name}</span>
         </div>
-        <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded">
-          {quote.id}d
+        <span className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded font-medium">
+          #{quote.quote_no}
         </span>
       </div>
 
-      {/* Metrics */}
-      <div className="space-y-1.5 text-xs text-gray-600 mb-3">
-        <div className="flex justify-between">
-          <span>Margin %:</span>
-          <span className="font-semibold text-gray-900">{quote.margin_percentage.toFixed(2)} %</span>
-        </div>
-        <div className="flex justify-between">
-          <span>Probability:</span>
-          <span className="font-semibold text-gray-900">{quote.probability.toFixed(2)}</span>
-        </div>
+      {/* Quote Name */}
+      <div className="mb-3">
+        <p className="text-sm font-medium text-gray-700 truncate" title={quote.quote_name}>
+          {quote.quote_name}
+        </p>
+      </div>
+
+      {/* Date */}
+      <div className="text-xs text-gray-500 mb-3">
+        <span>Issue Date: {formatDate(quote.date_of_issue)}</span>
       </div>
 
       {/* Value */}
       <div className="pt-3 border-t border-gray-100 flex items-center justify-between">
-        <span className="text-xs text-gray-500">{quote.id}d</span>
+        <span className="text-xs text-gray-500 font-medium">Quote Value</span>
         <span className="font-bold text-gray-900">
-          {quote.quote_value.toLocaleString('en-IN', {
+          ₹{quoteValue.toLocaleString('en-IN', {
             minimumFractionDigits: 2,
             maximumFractionDigits: 2
           })}

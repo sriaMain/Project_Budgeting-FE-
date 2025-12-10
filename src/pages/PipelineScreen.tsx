@@ -10,8 +10,7 @@ import { Layout } from '../components/Layout';
 import { PipelineStatistics } from '../components/PipelineStatistics';
 import { PipelineStage } from '../components/PipelineStage';
 import type { PipelineData, Quote } from '../types/pipeline.types';
-import { fetchDummyPipelineData } from '../data/pipelineDummyData';
-// import { fetchPipelineData } from '../api/pipelineApi'; // Use this when backend is ready
+import axiosInstance from '../utils/axiosInstance';
 
 interface PipelineScreenProps {
   userRole?: 'admin' | 'user';
@@ -33,21 +32,35 @@ export default function PipelineScreen({
     loadPipelineData();
   }, []);
 
+  /**
+   * Fetch pipeline data from API
+   * Includes error handling and loading states
+   */
   const loadPipelineData = async () => {
     try {
       setIsLoading(true);
       setError(null);
       
-      // Using dummy data for now
-      const data = await fetchDummyPipelineData();
+      const response = await axiosInstance.get('/pipeline-data/');
       
-      // When backend is ready, replace with:
-      // const data = await fetchPipelineData();
-      
-      setPipelineData(data);
-    } catch (err) {
+      if (response.status === 200 && response.data) {
+        setPipelineData(response.data);
+      } else {
+        throw new Error('Invalid response from server');
+      }
+    } catch (err: any) {
       console.error('Failed to load pipeline data:', err);
-      setError('Failed to load pipeline data. Please try again.');
+      
+      // User-friendly error messages
+      if (err.response?.status === 404) {
+        setError('Pipeline data not found. Please contact support.');
+      } else if (err.response?.status === 500) {
+        setError('Server error. Please try again later.');
+      } else if (err.code === 'ERR_NETWORK') {
+        setError('Network error. Please check your connection.');
+      } else {
+        setError('Failed to load pipeline data. Please try again.');
+      }
     } finally {
       setIsLoading(false);
     }

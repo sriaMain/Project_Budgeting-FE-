@@ -307,7 +307,7 @@ export default function AddQuotePage() {
   const taxAmount = (subTotal * taxPercentage) / 100;
   const total = subTotal + taxAmount;
   
-  // Mock values for right side stats
+  // Cost calculations
   const totalCost = total * 0.6;
   const inHouse = totalCost;
   const outsourced = 0;

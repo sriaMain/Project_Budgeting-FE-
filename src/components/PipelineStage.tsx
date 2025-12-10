@@ -13,7 +13,7 @@ interface PipelineStageProps {
 }
 
 const STAGE_COLORS = {
-  opportunity: 'bg-gray-50 border-gray-200',
+  oppurtunity: 'bg-gray-50 border-gray-200',
   scoping: 'bg-blue-50 border-blue-200',
   proposal: 'bg-yellow-50 border-yellow-200',
   confirmed: 'bg-green-50 border-green-200'
@@ -42,7 +42,7 @@ export const PipelineStage: React.FC<PipelineStageProps> = ({ stage, onQuoteClic
       <div className={`${colorClass} rounded-b-lg border-2 border-t-0 p-3 min-h-[400px] max-h-[calc(100vh-350px)] overflow-y-auto space-y-3`}>
         {stage.quotes.length > 0 ? (
           stage.quotes.map((quote) => (
-            <QuoteCard key={quote.id} quote={quote} onClick={onQuoteClick} />
+            <QuoteCard key={quote.quote_no} quote={quote} onClick={onQuoteClick} />
           ))
         ) : (
           <div className="text-center text-gray-400 text-sm py-8">

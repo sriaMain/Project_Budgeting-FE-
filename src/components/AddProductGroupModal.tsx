@@ -31,9 +31,6 @@ const AddProductGroupModal: React.FC<AddProductGroupModalProps> = ({ isOpen, onC
       
        const newGroup = response.data;
        console.log("API response:", response);
-      // MOCK RESPONSE for demonstration
-      // await new Promise(resolve => setTimeout(resolve, 800));
-      // const mockResponse = { id: Date.now().toString(), product_group: groupName };
       
       onSuccess(newGroup);
       setGroupName('');
