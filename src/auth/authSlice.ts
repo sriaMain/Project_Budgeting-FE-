@@ -1,9 +1,9 @@
 import { createSlice } from "@reduxjs/toolkit";
-import {initializeAuth} from "./authThunk";
+import { initializeAuth } from "./authThunk";
 
 interface initialStateType {
   isAuthenticated: boolean;
-  userRole: "admin" | "user" | "manager"|null;
+  userRole: "admin" | "user" | "manager" | null;
   accessToken: string | null;
   username: string | null;
   email: string | null;
@@ -48,7 +48,7 @@ export const authSlice = createSlice({
       state.username = action.payload.username;
       state.email = action.payload.email;
     });
-   builder.addCase(initializeAuth.rejected, (state) => {
+    builder.addCase(initializeAuth.rejected, (state) => {
       state.isAuthenticated = false;
       state.userRole = null;
       state.accessToken = null;
@@ -56,5 +56,8 @@ export const authSlice = createSlice({
       state.email = null;
     });
   },
- 
+
 });
+
+export const { loginSuccess, logoutSuccess, setAccessToken } = authSlice.actions;
+export default authSlice.reducer;

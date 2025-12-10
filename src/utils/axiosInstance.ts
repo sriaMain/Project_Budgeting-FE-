@@ -4,14 +4,16 @@ import store from "../store/store";
 
 const axiosRefresh = axios.create({
   baseURL:
-    import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/",
+    // import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/",
+    "http://192.168.0.174:8000/api/",
   withCredentials: true,
- 
+
 });
 
 const axiosInstance = axios.create({
   baseURL:
-    import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/",
+    // import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/",
+    "http://192.168.0.174:8000/api/",
   withCredentials: true,
 
 });
@@ -43,8 +45,8 @@ axiosInstance.interceptors.response.use(
       originalRequest._retry = true;
 
       try {
-        const response = await axiosRefresh.post("/accounts/refresh/",{ withCredentials: true })
-        ;
+        const response = await axiosRefresh.post("/accounts/refresh/", { withCredentials: true })
+          ;
 
         store.dispatch({
           type: "auth/setAccessToken",
@@ -58,11 +60,11 @@ axiosInstance.interceptors.response.use(
       } catch (err) {
 
         store.dispatch({
-          type:"auth/logoutSuccess"
+          type: "auth/logoutSuccess"
 
         })
-      window.location.href = "/"
-      
+        window.location.href = "/"
+
         return Promise.reject(err);
 
       }
