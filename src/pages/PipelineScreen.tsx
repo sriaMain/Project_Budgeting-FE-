@@ -18,10 +18,10 @@ interface PipelineScreenProps {
   onNavigate?: (page: string) => void;
 }
 
-export default function PipelineScreen({ 
-  userRole = 'admin', 
-  currentPage = 'pipeline', 
-  onNavigate = () => {} 
+export default function PipelineScreen({
+  userRole = 'admin',
+  currentPage = 'pipeline',
+  onNavigate = () => { }
 }: PipelineScreenProps) {
   const navigate = useNavigate();
   const [pipelineData, setPipelineData] = useState<PipelineData | null>(null);
@@ -40,9 +40,9 @@ export default function PipelineScreen({
     try {
       setIsLoading(true);
       setError(null);
-      
+
       const response = await axiosInstance.get('/pipeline-data/');
-      
+
       if (response.status === 200 && response.data) {
         setPipelineData(response.data);
       } else {
@@ -50,7 +50,7 @@ export default function PipelineScreen({
       }
     } catch (err: any) {
       console.error('Failed to load pipeline data:', err);
-      
+
       // User-friendly error messages
       if (err.response?.status === 404) {
         setError('Pipeline data not found. Please contact support.');
@@ -67,8 +67,7 @@ export default function PipelineScreen({
   };
 
   const handleQuoteClick = (quote: Quote) => {
-    console.log('Quote clicked:', quote);
-    // TODO: Navigate to edit quote page or show details
+    navigate(`/pipeline/quote/${quote.quote_no}`);
   };
 
   const handleNewQuote = () => {
@@ -95,7 +94,7 @@ export default function PipelineScreen({
       <Layout userRole={userRole} currentPage={currentPage} onNavigate={onNavigate}>
         <div className="flex flex-col items-center justify-center min-h-[400px]">
           <div className="text-red-600 mb-4">{error}</div>
-          <button 
+          <button
             onClick={loadPipelineData}
             className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
           >
@@ -116,7 +115,7 @@ export default function PipelineScreen({
         {/* Header */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
           <h1 className="text-3xl font-bold text-gray-900">Pipeline</h1>
-          
+
           <div className="flex items-center gap-3">
             <button
               onClick={handleFilterClick}
@@ -125,7 +124,7 @@ export default function PipelineScreen({
               <span>Filter</span>
               <SlidersHorizontal size={20} />
             </button>
-            
+
             <button
               onClick={handleNewQuote}
               className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg"
@@ -143,9 +142,9 @@ export default function PipelineScreen({
         <div className="overflow-x-auto pb-4">
           <div className="flex gap-4">
             {pipelineData.stages.map((stage) => (
-              <PipelineStage 
-                key={stage.stage} 
-                stage={stage} 
+              <PipelineStage
+                key={stage.stage}
+                stage={stage}
                 onQuoteClick={handleQuoteClick}
               />
             ))}

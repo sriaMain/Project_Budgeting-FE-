@@ -6,6 +6,7 @@ const axiosRefresh = axios.create({
   baseURL:
     // import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/",
     "http://192.168.0.174:8000/api/",
+
   withCredentials: true,
 
 });
