@@ -1,4 +1,4 @@
-import React, {  useEffect, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { LoginForm } from "./pages/LoginForm";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { ForgotPasswordForm } from "./pages/ForgotPasswordForm";
@@ -11,6 +11,7 @@ import ProtectedRoute from "./auth/ProtectedRoute";
 
 import ContactsScreen from "./pages/ContactsScreen";
 import PipelineScreen from "./pages/PipelineScreen";
+import QuoteDetailsPage from "./pages/QuoteDetailsPage";
 import AddQuotePage from "./pages/AddQuotePage";
 import { initializeAuth } from "./auth/authThunk";
 
@@ -23,9 +24,9 @@ const App: React.FC = () => {
 
   useEffect(() => {
     console.log("App mounted, initializing auth...");
-    
+
     initializeAuth();
-   console.log("Auth initialization dispatched.");
+    console.log("Auth initialization dispatched.");
   }, []);
 
 
@@ -39,7 +40,7 @@ const App: React.FC = () => {
 
           <Route path="/forgot-password" element={<ForgotPasswordForm />} />
           <Route path="/verification" element={<VerificationScreen />} />
-              
+
 
           {/* Protect Dashboard */}
           <Route
@@ -71,17 +72,31 @@ const App: React.FC = () => {
           <Route path="/contacts" element={
             <ProtectedRoute>
               <ContactsScreen
-             
+
               />
             </ProtectedRoute>
           } />
-          
+
           {/* Protect Pipeline */}
           <Route
             path="/pipeline"
             element={
               <ProtectedRoute>
                 <PipelineScreen
+                  userRole={userRole}
+                  currentPage={currentPage}
+                  onNavigate={handleNavigate}
+                />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protect Quote Details */}
+          <Route
+            path="/pipeline/quote/:quoteNo"
+            element={
+              <ProtectedRoute>
+                <QuoteDetailsPage
                   userRole={userRole}
                   currentPage={currentPage}
                   onNavigate={handleNavigate}
@@ -99,10 +114,10 @@ const App: React.FC = () => {
               </ProtectedRoute>
             }
           />
-          
+
           <Route path="/create-password" element={<CreatePasswordScreen />} />
-          
-        
+
+
         </Routes>
       </BrowserRouter>
     </main>
