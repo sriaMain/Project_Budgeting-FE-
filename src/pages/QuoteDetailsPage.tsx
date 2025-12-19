@@ -4,13 +4,15 @@
  * Matches the reference design exactly
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Edit, FileText, Share2, Send } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { InfoDisplay } from '../components/InfoDisplay';
 import { ReusableTable, type Column } from '../components/ReusableTable';
 import { CreateProjectModal } from '../components/CreateProjectModal';
+import axiosInstance from '../utils/axiosInstance';
+import type { QuoteDetails } from '../types/pipeline.types';
 
 interface QuoteDetailsPageProps {
     userRole?: 'admin' | 'user';
@@ -28,7 +30,7 @@ interface ProductRow {
     amount: string;
     cost: string;
     po: string;
-    bri: string;
+    bill: string;
 }
 
 export default function QuoteDetailsPage({
@@ -39,94 +41,152 @@ export default function QuoteDetailsPage({
     const { quoteNo } = useParams<{ quoteNo: string }>();
     const navigate = useNavigate();
     const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+    const [quoteDetails, setQuoteDetails] = useState<QuoteDetails | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
+    const [isSending, setIsSending] = useState(false);
+    const [isDownloadingPdf, setIsDownloadingPdf] = useState(false);
+    const [isSharing, setIsSharing] = useState(false);
 
-    // Static data for demonstration (as requested)
-    const quoteData = {
-        quoteNo: quoteNo || '40',
-        author: 'Vigranth Kumar',
-        dateOfIssue: '25-10-2025',
-        dueDate: '25-12-2025',
-        quoteName: 'Client A quote',
-        status: 'Opportunity',
-        client: 'Client A',
-        clientSubtitle: 'Project Essentials Template'
+    useEffect(() => {
+        if (quoteNo) {
+            fetchQuoteDetails();
+        }
+    }, [quoteNo]);
+
+    const fetchQuoteDetails = async () => {
+        try {
+            setIsLoading(true);
+            setError(null);
+            const response = await axiosInstance.get(`/quotes/${quoteNo}/`);
+            setQuoteDetails(response.data);
+        } catch (err: any) {
+            console.error('Failed to fetch quote details:', err);
+            setError('Failed to load quote details. Please try again.');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    // Static product data matching the reference design
-    const products: ProductRow[] = [
-        {
-            id: '1',
-            productGroup: 'Subvest',
-            productName: 'Subvest',
-            quantity: '0.00',
-            unit: 'Total',
-            unitPrice: '0.00',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
-        },
-        {
-            id: '2',
-            productGroup: '',
-            productName: 'In-house',
-            quantity: '0.00',
-            unit: '',
-            unitPrice: '0.00',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
-        },
-        {
-            id: '3',
-            productGroup: '',
-            productName: 'Out-Sourced',
-            quantity: '0.00',
-            unit: '',
-            unitPrice: '0.00',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
-        },
-        {
-            id: '4',
-            productGroup: 'Total/MI',
-            productName: '',
-            quantity: '0.00',
-            unit: '',
-            unitPrice: '',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
-        },
-        {
-            id: '5',
-            productGroup: 'Inclusive Synoptic',
-            productName: '',
-            quantity: '0.00',
-            unit: '',
-            unitPrice: '',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
-        },
-        {
-            id: '6',
-            productGroup: 'To be Scoped (TBS)',
-            productName: '',
-            quantity: '0.00',
-            unit: '',
-            unitPrice: '',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
+    const handleEdit = () => {
+        navigate(`/pipeline/edit-quote/${quoteNo}`);
+        // TODO: Navigate to edit page or open edit modal
+    };
+
+    const handleSendQuote = async () => {
+        if (!quoteNo) return;
+
+        try {
+            setIsSending(true);
+            await axiosInstance.post(`quotes/${quoteNo}/send/`);
+            alert('Quote sent successfully!');
+        } catch (err: any) {
+            console.error('Failed to send quote:', err);
+            alert('Failed to send quote. Please try again.');
+        } finally {
+            setIsSending(false);
         }
-    ];
+    };
+
+    const handleDownloadPdf = async () => {
+        if (!quoteNo) return;
+
+        try {
+            setIsDownloadingPdf(true);
+            const response = await axiosInstance.get(`quotes/${quoteNo}/invoice/`, {
+                responseType: 'blob', // Important for handling binary data
+            });
+
+            // Create a URL for the blob
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', `quote_${quoteNo}.pdf`); // Set the file name
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+            window.URL.revokeObjectURL(url); // Clean up
+        } catch (err: any) {
+            console.error('Failed to download PDF:', err);
+            alert('Failed to download PDF. Please try again.');
+        } finally {
+            setIsDownloadingPdf(false);
+        }
+    };
+
+    const handleShareLink = async () => {
+        if (!quoteNo) return;
+
+        try {
+            setIsSharing(true);
+            const response = await axiosInstance.post(`/quotes/${quoteNo}/send/`);
+            const shareLink = response.data.link; // Assuming the API returns { link: "..." }
+
+            if (shareLink) {
+                await navigator.clipboard.writeText(shareLink);
+                alert('Link copied to clipboard!');
+            } else {
+                throw new Error('No link received from server');
+            }
+        } catch (err: any) {
+            console.error('Failed to share link:', err);
+            alert('Failed to generate share link. Please try again.');
+        } finally {
+            setIsSharing(false);
+        }
+    };
+
+    if (isLoading) {
+        return (
+            <Layout userRole={userRole} currentPage={currentPage} onNavigate={onNavigate}>
+                <div className="flex items-center justify-center min-h-[400px]">
+                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+                </div>
+            </Layout>
+        );
+    }
+
+    if (error || !quoteDetails) {
+        return (
+            <Layout userRole={userRole} currentPage={currentPage} onNavigate={onNavigate}>
+                <div className="flex flex-col items-center justify-center min-h-[400px]">
+                    <div className="text-red-600 mb-4">{error || 'Quote not found'}</div>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+                    >
+                        Retry
+                    </button>
+                </div>
+            </Layout>
+        );
+    }
+
+    // Map API data to UI format
+    const quoteData = {
+        quoteNo: quoteDetails.quote_no.toString(),
+        author: quoteDetails.author,
+        dateOfIssue: new Date(quoteDetails.date_of_issue).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-'),
+        dueDate: new Date(quoteDetails.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: '2-digit', year: 'numeric' }).replace(/\//g, '-'),
+        quoteName: quoteDetails.quote_name,
+        status: quoteDetails.status,
+        client: quoteDetails.client.company_name,
+        clientSubtitle: `${quoteDetails.client.city}, ${quoteDetails.client.state}`
+    };
+
+    // Map items to table rows
+    const products: ProductRow[] = quoteDetails.items.map((item, index) => ({
+        id: index.toString(),
+        productGroup: item.product_group,
+        productName: item.product_name,
+        quantity: item.quantity.toFixed(2),
+        unit: item.unit,
+        unitPrice: parseFloat(item.price_per_unit).toFixed(2),
+        amount: parseFloat(item.amount).toFixed(2),
+        cost: parseFloat(item.cost).toFixed(2),
+        po: item.po_number || '',
+        bill: item.bill_number || ''
+    }));
 
     // Define table columns for products
     const productColumns: Column<ProductRow>[] = [
@@ -169,16 +229,11 @@ export default function QuoteDetailsPage({
             className: 'text-center'
         },
         {
-            header: 'BRI',
-            accessor: 'bri',
+            header: 'BILL',
+            accessor: 'bill',
             className: 'text-center'
         }
     ];
-
-    const handleEdit = () => {
-        console.log('Edit quote:', quoteNo);
-        // TODO: Navigate to edit page or open edit modal
-    };
 
     return (
         <Layout userRole={userRole} currentPage={currentPage} onNavigate={onNavigate}>
@@ -222,13 +277,6 @@ export default function QuoteDetailsPage({
                                     <span className="inline-flex items-center bg-purple-100 text-purple-700 px-3 py-1 rounded text-sm font-medium">
                                         {quoteData.status}
                                     </span>
-                                    <button
-                                        onClick={handleEdit}
-                                        className="p-1 hover:bg-gray-100 rounded transition-colors"
-                                        aria-label="Edit status"
-                                    >
-                                        <Edit size={16} className="text-gray-600" />
-                                    </button>
                                 </div>
                             }
                         />
@@ -272,17 +320,41 @@ export default function QuoteDetailsPage({
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-3 pb-6">
-                    <button className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium shadow-sm">
-                        <FileText size={18} />
-                        <span>PDF</span>
+                    <button
+                        onClick={handleDownloadPdf}
+                        disabled={isDownloadingPdf}
+                        className={`flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium shadow-sm ${isDownloadingPdf ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    >
+                        {isDownloadingPdf ? (
+                            <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <FileText size={18} />
+                        )}
+                        <span>{isDownloadingPdf ? 'Downloading...' : 'PDF'}</span>
                     </button>
-                    <button className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium shadow-sm">
-                        <Share2 size={18} />
-                        <span>Share via link</span>
+                    <button
+                        onClick={handleShareLink}
+                        disabled={isSharing}
+                        className={`flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium shadow-sm ${isSharing ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    >
+                        {isSharing ? (
+                            <div className="w-4 h-4 border-2 border-gray-600 border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <Share2 size={18} />
+                        )}
+                        <span>{isSharing ? 'Sharing...' : 'Share via link'}</span>
                     </button>
-                    <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg">
-                        <Send size={18} />
-                        <span>Send</span>
+                    <button
+                        onClick={handleSendQuote}
+                        disabled={isSending}
+                        className={`flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg ${isSending ? 'opacity-70 cursor-not-allowed' : ''}`}
+                    >
+                        {isSending ? (
+                            <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                        ) : (
+                            <Send size={18} />
+                        )}
+                        <span>{isSending ? 'Sending...' : 'Send'}</span>
                     </button>
                 </div>
             </div>
@@ -292,6 +364,10 @@ export default function QuoteDetailsPage({
                 isOpen={isCreateProjectModalOpen}
                 onClose={() => setIsCreateProjectModalOpen(false)}
                 quoteName={quoteData.quoteName}
+                quoteId={quoteDetails.quote_no}
+                clientId={quoteDetails.client.id}
+                clientName={quoteDetails.client.company_name}
+                projectManagerName={quoteDetails.author}
             />
         </Layout>
     );

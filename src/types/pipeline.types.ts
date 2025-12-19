@@ -51,3 +51,44 @@ export interface PipelineFilters {
   min_value?: number;
   max_value?: number;
 }
+
+// Quote Details Types
+export interface QuoteItem {
+  product_group: string;
+  product_name: string;
+  quantity: number;
+  unit: string;
+  price_per_unit: string;
+  amount: string;
+  cost: string;
+  po_number: string | null;
+  bill_number: string | null;
+}
+
+export interface QuoteClient {
+  id: number;
+  company_name: string;
+  street_address: string;
+  city: string;
+  state: string;
+  country: string;
+}
+
+export interface QuoteDetails {
+  quote_no: number;
+  quote_name: string;
+  date_of_issue: string;
+  due_date: string;
+  status: string;
+  author: string;
+  client: QuoteClient;
+  sub_total: string;
+  tax_percentage: string;
+  total_amount: string;
+  total_cost: string;
+  in_house_cost: string;
+  outsourced_cost: string;
+  invoiced_sum: string;
+  to_be_invoiced_sum: string;
+  items: QuoteItem[];
+}

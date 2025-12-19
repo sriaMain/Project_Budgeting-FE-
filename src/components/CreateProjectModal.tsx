@@ -4,13 +4,18 @@
  */
 
 import React, { useState } from 'react';
-import { X, User, Calendar } from 'lucide-react';
+import { X, User, Calendar, Currency } from 'lucide-react';
 import { InputField } from './InputField';
+import axiosInstance from '../utils/axiosInstance';
 
 interface CreateProjectModalProps {
     isOpen: boolean;
     onClose: () => void;
     quoteName?: string;
+    quoteId?: number;
+    clientId?: number;
+    clientName?: string;
+    projectManagerName?: string;
 }
 
 type TabType = 'project' | 'budget';
@@ -18,32 +23,62 @@ type TabType = 'project' | 'budget';
 export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
     isOpen,
     onClose,
-    quoteName = ''
+    quoteName = '',
+    quoteId,
+    clientId,
+    clientName,
+    projectManagerName = '',
 }) => {
     const [activeTab, setActiveTab] = useState<TabType>('project');
     const [setQuoteConfirmed, setSetQuoteConfirmed] = useState(false);
     const [projectType, setProjectType] = useState<'internal' | 'external'>('internal');
     const [budgetMethod, setBudgetMethod] = useState<'quoted' | 'manual'>('quoted');
 
-    // Form state (static for now)
-    const [projectName, setProjectName] = useState(quoteName);
+    // Form state
+    const [projectName, setProjectName] = useState(quoteName ?? '');
     const [membersOnly, setMembersOnly] = useState(false);
-    const [client, setClient] = useState('Client D');
-    const [startDate, setStartDate] = useState('25-10-2025');
-    const [dueDate, setDueDate] = useState('');
+    const [currency, setCurrency] = useState<string>('INR');
+    const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
+    const [dueDate, setDueDate] = useState(new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]);
     const [totalHours, setTotalHours] = useState('');
     const [totalBudget, setTotalBudget] = useState('');
     const [billsExpenses, setBillsExpenses] = useState('');
-    const [popupMode, setPopupMode] = useState<"quoted" | "manual" | null>(null);
 
-
+    React.useEffect(() => {
+        if (isOpen) {
+            if (quoteName) setProjectName(quoteName);
+        }
+    }, [isOpen, quoteName]);
 
     if (!isOpen) return null;
+    const handleCreateProject = async () => {
+        const budgetPayload = budgetMethod === 'quoted'
+            ? { use_quoted_amounts: true }
+            : {
+                use_quoted_amounts: false,
+                total_hours: Number(totalHours) || 0,
+                total_budget: Number(totalBudget) || 0,
+                bills_and_expenses: Number(billsExpenses) || 0,
+                currency: currency,
+            };
 
-    const handleCreateProject = () => {
-        console.log('Creating project...');
-        // TODO: Implement project creation logic
-        onClose();
+        const payload = {
+            project_name: projectName,
+            project_type: projectType,
+            client: clientId,
+            start_date: startDate,
+            end_date: dueDate,
+            created_from_quotation: typeof quoteId === 'number' ? quoteId : undefined,
+            budget: budgetPayload,
+        };
+
+        try {
+            const response = await axiosInstance.post('projects/', payload);
+            console.log('Project created:', response.data);
+            onClose();
+        } catch (error) {
+            console.error('Error creating project:', error);
+        }
     };
 
     const handleBackdropClick = (e: React.MouseEvent<HTMLDivElement>) => {
@@ -144,7 +179,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                     />
                                 </div>
 
-                                {/* Project Manager */}
+                                {/* Project Manager - Read Only */}
                                 <div>
                                     <label className="block text-base font-medium text-gray-900 mb-2">
                                         Project Manager
@@ -154,7 +189,9 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                             <div className="w-8 h-8 bg-gray-300 rounded-full flex items-center justify-center">
                                                 <User size={16} className="text-gray-600" />
                                             </div>
-                                            <span className="text-gray-900 font-medium">SRIDEVI GEDALA</span>
+                                            <span className="text-gray-900 font-medium">
+                                                {projectManagerName || 'Not specified'}
+                                            </span>
                                         </div>
                                         <div className="flex items-center gap-2">
                                             <label className="relative inline-flex items-center cursor-pointer">
@@ -220,35 +257,11 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                         Project Setup
                                     </label>
                                     <div className="space-y-4">
-                                        {/* Client Dropdown */}
+                                        {/* Client - Read Only */}
                                         <div>
                                             <label className="block text-sm text-gray-600 mb-1">Client</label>
-                                            <div className="relative">
-                                                <select
-                                                    value={client}
-                                                    onChange={(e) => setClient(e.target.value)}
-                                                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 appearance-none"
-                                                >
-                                                    <option value="Client D">Client D</option>
-                                                    <option value="Client A">Client A</option>
-                                                    <option value="Client B">Client B</option>
-                                                    <option value="Client C">Client C</option>
-                                                </select>
-                                                <div className="absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none">
-                                                    <svg
-                                                        className="w-5 h-5 text-gray-400"
-                                                        fill="none"
-                                                        stroke="currentColor"
-                                                        viewBox="0 0 24 24"
-                                                    >
-                                                        <path
-                                                            strokeLinecap="round"
-                                                            strokeLinejoin="round"
-                                                            strokeWidth={2}
-                                                            d="M19 9l-7 7-7-7"
-                                                        />
-                                                    </svg>
-                                                </div>
+                                            <div className="w-full px-4 py-2.5 bg-gray-50 border border-gray-300 rounded-lg text-gray-900">
+                                                <span className="font-medium">{clientName || 'Not specified'}</span>
                                             </div>
                                         </div>
 
@@ -260,7 +273,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                                     type="text"
                                                     value={startDate}
                                                     onChange={(e) => setStartDate(e.target.value)}
-                                                    placeholder="DD-MM-YYYY"
+                                                    placeholder="YYYY-MM-DD"
                                                 />
                                             </div>
                                             <div>
@@ -269,7 +282,7 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                                     type="text"
                                                     value={dueDate}
                                                     onChange={(e) => setDueDate(e.target.value)}
-                                                    placeholder="DD-MM-YYYY"
+                                                    placeholder="YYYY-MM-DD"
                                                 />
                                             </div>
                                         </div>
@@ -306,33 +319,33 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                 </p>
 
                                 {/* Budget Fields - Show different fields based on budget method */}
-                               {/* Budget Fields */}
-<div className={`grid gap-4 ${budgetMethod === "manual" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 md:grid-cols-3"}`}>
-    
-    <InputField
-        label="Total hours"
-        value={totalHours}
-        onChange={(e) => setTotalHours(e.target.value)}
-        placeholder="0"
-    />
+                                {/* Budget Fields */}
+                                <div className={`grid gap-4 ${budgetMethod === "manual" ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1 md:grid-cols-3"}`}>
 
-    <InputField
-        label="Total budget INR"
-        value={totalBudget}
-        onChange={(e) => setTotalBudget(e.target.value)}
-        placeholder="0"
-    />
+                                    <InputField
+                                        label="Total hours"
+                                        value={totalHours}
+                                        onChange={(e) => setTotalHours(e.target.value)}
+                                        placeholder="0"
+                                    />
 
-    {/* Hide Bills & Expenses only in manual mode */}
-    {budgetMethod === "quoted" && (
-        <InputField
-            label="Bills & Expenses"
-            value={billsExpenses}
-            onChange={(e) => setBillsExpenses(e.target.value)}
-            placeholder="0"
-        />
-    )}
-</div>
+                                    <InputField
+                                        label="Total budget INR"
+                                        value={totalBudget}
+                                        onChange={(e) => setTotalBudget(e.target.value)}
+                                        placeholder="0"
+                                    />
+
+                                    {/* Hide Bills & Expenses only in manual mode */}
+                                    {budgetMethod === "quoted" && (
+                                        <InputField
+                                            label="Bills & Expenses"
+                                            value={billsExpenses}
+                                            onChange={(e) => setBillsExpenses(e.target.value)}
+                                            placeholder="0"
+                                        />
+                                    )}
+                                </div>
 
 
 
@@ -341,6 +354,8 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                     <label className="block text-sm text-gray-600 mb-1">Price list</label>
                                     <div className="relative">
                                         <select
+                                            value={currency}
+                                            onChange={(e) => setCurrency(e.target.value)}
                                             className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600 appearance-none"
                                         >
                                             <option value="INR">INR</option>

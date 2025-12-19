@@ -6,7 +6,7 @@ import VerificationScreen from "./pages/VerificationScreen";
 import CreatePasswordScreen from "./pages/CreatePasswordScreen";
 import DashboardScreen from "./pages/DashboardScreen";
 import AdministrationScreen from "./pages/AdministrationScreen";
-
+import ProjectsScreen from "./pages/ProjectsScreen";
 import ProtectedRoute from "./auth/ProtectedRoute";
 
 import ContactsScreen from "./pages/ContactsScreen";
@@ -91,6 +91,20 @@ const App: React.FC = () => {
             }
           />
 
+          {/* Protect Projects */}
+          <Route
+            path="/projects"
+            element={
+              <ProtectedRoute>
+                <ProjectsScreen
+                  userRole={userRole}
+                  currentPage={currentPage}
+                  onNavigate={handleNavigate}
+                />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Protect Quote Details */}
           <Route
             path="/pipeline/quote/:quoteNo"
@@ -108,6 +122,16 @@ const App: React.FC = () => {
           {/* Protect Add Quote */}
           <Route
             path="/pipeline/add-quote"
+            element={
+              <ProtectedRoute>
+                <AddQuotePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Protect Edit Quote */}
+          <Route
+            path="/pipeline/edit-quote/:quoteNo"
             element={
               <ProtectedRoute>
                 <AddQuotePage />
