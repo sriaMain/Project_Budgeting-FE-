@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Layout } from '../components/Layout';
 import { Button } from '../components/Button';
-// import { InputField } from '../components/InputField';
+import { InputField } from '../components/InputField';
 import { Search, Filter, Plus, ChevronDown, MoreHorizontal, Wallet, PieChart, TrendingUp } from 'lucide-react';
 import { CreateProjectModal } from '../components/CreateProjectModal';
 import axiosInstance from '../utils/axiosInstance';
