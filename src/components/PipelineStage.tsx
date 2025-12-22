@@ -10,8 +10,6 @@ import type { StageColumn, Quote } from '../types/pipeline.types';
 interface PipelineStageProps {
   stage: StageColumn;
   onQuoteClick?: (quote: Quote) => void;
-  onQuoteDragStart?: (quote: Quote, fromStage: string, e: React.DragEvent) => void;
-  onQuoteDrop?: (toStage: string, e: React.DragEvent) => void;
 }
 
 const STAGE_COLORS = {
@@ -21,7 +19,7 @@ const STAGE_COLORS = {
   confirmed: 'bg-green-50 border-green-200'
 };
 
-export const PipelineStage: React.FC<PipelineStageProps> = ({ stage, onQuoteClick, onQuoteDragStart, onQuoteDrop }) => {
+export const PipelineStage: React.FC<PipelineStageProps> = ({ stage, onQuoteClick }) => {
   const colorClass = STAGE_COLORS[stage.stage] || 'bg-gray-50 border-gray-200';
 
   return (
@@ -41,20 +39,10 @@ export const PipelineStage: React.FC<PipelineStageProps> = ({ stage, onQuoteClic
       </div>
 
       {/* Quotes List */}
-      <div
-        onDragOver={(e) => e.preventDefault()}
-        onDrop={(e) => onQuoteDrop?.(stage.stage, e)}
-        className={`${colorClass} rounded-b-lg border-2 border-t-0 p-3 min-h-[400px] max-h-[calc(100vh-350px)] overflow-y-auto space-y-3`}
-      >
+      <div className={`${colorClass} rounded-b-lg border-2 border-t-0 p-3 min-h-[400px] max-h-[calc(100vh-350px)] overflow-y-auto space-y-3`}>
         {stage.quotes.length > 0 ? (
           stage.quotes.map((quote) => (
-            <div
-              key={quote.quote_no}
-              draggable
-              onDragStart={(e) => onQuoteDragStart?.(quote, stage.stage, e)}
-            >
-              <QuoteCard quote={quote} onClick={onQuoteClick} />
-            </div>
+            <QuoteCard key={quote.quote_no} quote={quote} onClick={onQuoteClick} />
           ))
         ) : (
           <div className="text-center text-gray-400 text-sm py-8">

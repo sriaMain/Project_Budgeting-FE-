@@ -4,8 +4,8 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { ArrowLeft, Plus, Trash2, GripVertical, ChevronDown, AlertCircle } from 'lucide-react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Plus, Trash2, GripVertical, ChevronDown } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { Layout } from '../components/Layout';
 import { AddClientModal } from '../components/AddClientModal';
@@ -23,7 +23,6 @@ interface ProductRow {
   unit: string;
   unit_price: number;
   amount: number;
-  apiId?: number;
 }
 
 interface POC {
@@ -86,8 +85,6 @@ interface UnitChoice {
 
 export default function AddQuotePage() {
   const navigate = useNavigate();
-  const { quoteNo } = useParams<{ quoteNo: string }>();
-  const isEditMode = !!quoteNo;
   const username = useSelector((state: any) => state.auth.username);
 
   // Get today's date in YYYY-MM-DD format
@@ -136,61 +133,15 @@ export default function AddQuotePage() {
     initializeData();
   }, []);
 
-  // Fetch quote details if in edit mode
-  useEffect(() => {
-    if (isEditMode && quoteNo && !isLoadingData) {
-      fetchQuoteDetails();
-    }
-  }, [isEditMode, quoteNo, isLoadingData]);
-
-  const fetchQuoteDetails = async () => {
-    try {
-      const response = await axiosInstance.get(`/quotes/${quoteNo}/`);
-      if (response.status === 200) {
-        const data = response.data;
-
-        // Map API data to form state
-        setQuoteDetails({
-          author: data.author,
-          dateOfIssue: data.date_of_issue.split('T')[0],
-          dueDate: data.due_date.split('T')[0],
-          client: data.client.company_name,
-          poc: data.poc ? data.poc.poc_name : '', // Assuming API returns nested POC object or ID
-          status: data.status,
-          quoteName: data.quote_name
-        });
-
-        // Map items
-        const mappedItems: ProductRow[] = data.items.map((item: any) => ({
-          id: crypto.randomUUID(),
-          apiId: item.id,
-          group: item.product_group,
-          product: item.product_name,
-          description: item.description || '',
-          quantity: parseFloat(item.quantity),
-          unit: item.unit,
-          unit_price: parseFloat(item.price_per_unit),
-          amount: parseFloat(item.amount)
-        }));
-
-        setItems(mappedItems);
-        setTaxPercentage(parseFloat(data.tax_percentage) || 0);
-      }
-    } catch (err) {
-      console.error('Failed to fetch quote details:', err);
-      setErrors({ general: 'Failed to load quote details' });
-    }
-  };
-
   // Update author when username loads from Redux
   useEffect(() => {
-    if (username && !isEditMode) {
+    if (username) {
       setQuoteDetails(prev => ({
         ...prev,
         author: username
       }));
     }
-  }, [username, isEditMode]);
+  }, [username]);
 
   /**
    * Initialize all data fetching in parallel for optimal performance
@@ -430,7 +381,6 @@ export default function AddQuotePage() {
           const service = services.find(s => s.product_service_name === item.product);
 
           return {
-            ...(item.apiId && { id: item.apiId }),
             product_service: service ? parseInt(service.id) : null,
             description: item.description || '',
             quantity: item.quantity,
@@ -452,29 +402,18 @@ export default function AddQuotePage() {
         date_of_issue: quoteDetails.dateOfIssue,
         due_date: quoteDetails.dueDate,
         client: selectedClient.id,
-        status: quoteDetails.status,
-        tax_percentage: taxPercentage,
         ...(pocId && { poc: pocId }), // Include POC only if selected
         items: quoteItems
       };
 
       console.log('Submitting quote:', payload);
 
-      let response;
-      if (isEditMode) {
-        response = await axiosInstance.put(`quotes/${quoteNo}/`, payload);
-        if (response.status === 201 || response.status === 200) {
-          console.log('Quote saved successfully:', response.data);
-          // Navigate to pipeline or show success message
-          navigate(`/pipeline/quote/${quoteNo}`);
-        }
-      } else {
-        response = await axiosInstance.post('quotes/', payload);
-        if (response.status === 201 || response.status === 200) {
-          console.log('Quote saved successfully:', response.data);
-          // Navigate to pipeline or show success message
-          navigate('/pipeline');
-        }
+      const response = await axiosInstance.post('/quotes/', payload);
+
+      if (response.status === 201 || response.status === 200) {
+        console.log('Quote created successfully:', response.data);
+        // Navigate to pipeline or show success message
+        navigate('/pipeline');
       }
     } catch (error: any) {
       console.error('Failed to create quote:', error);
@@ -525,7 +464,7 @@ export default function AddQuotePage() {
               Pipeline
             </button>
             <span className="text-gray-400">/</span>
-            <span className="text-gray-700 font-medium">{isEditMode ? 'Edit Quote Details' : 'Add Quote Details'}</span>
+            <span className="text-gray-700 font-medium">Add Quote Details</span>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden relative">
@@ -542,7 +481,7 @@ export default function AddQuotePage() {
 
             {/* Header Section */}
             <div className="p-4 sm:p-6 md:p-8 border-b border-gray-100">
-              <h1 className="text-lg sm:text-xl font-bold text-gray-800 mb-6 sm:mb-8">{isEditMode ? 'Edit Quote Details' : 'Add Quote Details'}</h1>
+              <h1 className="text-lg sm:text-xl font-bold text-gray-800 mb-6 sm:mb-8">Add Quote Details</h1>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 lg:gap-x-24 gap-y-4 sm:gap-y-6">
                 {/* Left Column */}
@@ -1041,14 +980,6 @@ export default function AddQuotePage() {
               </div>
             </div>
 
-            {/* Error Message */}
-            {errors.general && (
-              <div className="mx-4 sm:mx-6 md:mx-8 mb-4 p-4 bg-red-50 border border-red-200 rounded-lg flex items-center gap-3 text-red-700 animate-in fade-in slide-in-from-top-2">
-                <AlertCircle size={20} className="text-red-500 shrink-0" />
-                <p className="text-sm font-medium">{errors.general}</p>
-              </div>
-            )}
-
             {/* Bottom Action Bar */}
             <div className="p-4 sm:p-6 bg-white border-t border-gray-200 flex justify-center sticky bottom-0 z-10">
               <button
@@ -1056,7 +987,7 @@ export default function AddQuotePage() {
                 disabled={isSaving}
                 className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-8 sm:px-12 rounded shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSaving ? 'Saving...' : (isEditMode ? 'Update' : 'Save')}
+                {isSaving ? 'Saving...' : 'Save'}
               </button>
             </div>
 
