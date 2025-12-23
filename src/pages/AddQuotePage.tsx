@@ -5,7 +5,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { ArrowLeft, Plus, Trash2, GripVertical, ChevronDown } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { Layout } from '../components/Layout';
 import { AddClientModal } from '../components/AddClientModal';
@@ -13,6 +13,7 @@ import ModulesTab from '../components/ModulesTab';
 import type { Quote, QuoteFormData, PipelineStage } from '../types/pipeline.types';
 import axiosInstance from '../utils/axiosInstance';
 import { parseApiErrors } from '../utils/parseApiErrors';
+import { toast } from 'react-hot-toast';
 
 interface ProductRow {
   id: string;
@@ -85,7 +86,10 @@ interface UnitChoice {
 
 export default function AddQuotePage() {
   const navigate = useNavigate();
+  const location = useLocation();
+  const { quoteId, projectId } = useParams<{ quoteId?: string; projectId?: string }>();
   const username = useSelector((state: any) => state.auth.username);
+  const isEditMode = !!quoteId || !!projectId;
 
   // Get today's date in YYYY-MM-DD format
   const getTodayDate = () => {
@@ -133,6 +137,88 @@ export default function AddQuotePage() {
     initializeData();
   }, []);
 
+  // Fetch existing data if in edit mode
+  useEffect(() => {
+    if (isEditMode) {
+      fetchExistingData();
+    }
+  }, [isEditMode, quoteId, projectId]);
+
+  // Handle pre-filled client from navigation state
+  useEffect(() => {
+    if (location.state?.clientName && !isEditMode) {
+      setQuoteDetails(prev => ({
+        ...prev,
+        client: location.state.clientName
+      }));
+    }
+  }, [location.state, isEditMode]);
+
+  const fetchExistingData = async () => {
+    setIsLoadingData(true);
+    try {
+      const endpoint = projectId ? `/projects/${projectId}/` : `/quotes/${quoteId}/`;
+      const response = await axiosInstance.get(endpoint);
+
+      if (response.status === 200) {
+        const data = response.data;
+
+        if (projectId) {
+          // Map project data
+          setQuoteDetails({
+            author: data.created_by?.username || username || '',
+            dateOfIssue: data.start_date || getTodayDate(),
+            dueDate: data.end_date || getTodayDate(),
+            client: data.client_details?.company_name || data.client?.company_name || data.client_details?.name || data.client_name || '',
+            poc: '', // Projects might not have POC in the same way
+            status: data.status || '',
+            quoteName: data.project_name || ''
+          });
+        } else {
+          // Map quote data
+          setQuoteDetails({
+            author: data.created_by?.username || username || '',
+            dateOfIssue: data.date_of_issue || getTodayDate(),
+            dueDate: data.due_date || getTodayDate(),
+            client: data.client_details?.company_name || data.client?.company_name || data.client_name || '',
+            poc: data.poc_details?.poc_name || '',
+            status: data.status || '',
+            quoteName: data.quote_name || ''
+          });
+
+          if (data.items && data.items.length > 0) {
+            const mappedItems = data.items.map((item: {
+              product_service_details?: {
+                product_group?: string;
+                product_service_name?: string;
+              };
+              description?: string;
+              quantity: string | number;
+              unit?: string;
+              price_per_unit: string | number;
+            }) => ({
+              id: crypto.randomUUID(),
+              group: item.product_service_details?.product_group || '',
+              product: item.product_service_details?.product_service_name || '',
+              description: item.description || '',
+              quantity: typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity) || 0),
+              unit: item.unit || '',
+              unit_price: typeof item.price_per_unit === 'number' ? item.price_per_unit : (parseFloat(item.price_per_unit) || 0),
+              amount: (typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity) || 0)) *
+                (typeof item.price_per_unit === 'number' ? item.price_per_unit : (parseFloat(item.price_per_unit) || 0))
+            }));
+            setItems(mappedItems);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Failed to fetch existing data:', error);
+      setErrors({ general: 'Failed to load existing data' });
+    } finally {
+      setIsLoadingData(false);
+    }
+  };
+
   // Update author when username loads from Redux
   useEffect(() => {
     if (username) {
@@ -143,28 +229,15 @@ export default function AddQuotePage() {
     }
   }, [username]);
 
-  /**
-   * Initialize all data fetching in parallel for optimal performance
-   * Uses Promise.allSettled to handle partial failures gracefully
-   */
   const initializeData = async () => {
     setIsLoadingData(true);
-
     try {
-      const results = await Promise.allSettled([
+      await Promise.allSettled([
         fetchClients(),
         fetchProductGroupsWithModules(),
         fetchStatusChoices(),
         fetchUnitChoices()
       ]);
-
-      // Log any failed requests for debugging
-      results.forEach((result, index) => {
-        if (result.status === 'rejected') {
-          const endpoints = ['clients', 'product-groups-with-modules', 'quote-status-choices', 'quote-item-unit-choices'];
-          console.error(`Failed to fetch ${endpoints[index]}:`, result.reason);
-        }
-      });
     } catch (error) {
       console.error('Error initializing data:', error);
     } finally {
@@ -172,9 +245,6 @@ export default function AddQuotePage() {
     }
   };
 
-  /**
-   * Fetch clients list with POCs
-   */
   const fetchClients = async () => {
     try {
       const response = await axiosInstance.get('/client/pocs/');
@@ -183,14 +253,10 @@ export default function AddQuotePage() {
       }
     } catch (err) {
       console.error('Failed to fetch clients:', err);
-      throw err; // Re-throw for Promise.allSettled
+      throw err;
     }
   };
 
-  /**
-   * Fetch product groups with nested modules
-   * Flattens active modules into services array
-   */
   const fetchProductGroupsWithModules = async () => {
     try {
       const response = await axiosInstance.get('/product-groups-with-modules/');
@@ -198,7 +264,6 @@ export default function AddQuotePage() {
         const data: ProductGroup[] = response.data;
         setProductGroups(data);
 
-        // Flatten modules from all groups into services array
         const allServices: Service[] = [];
         data.forEach(group => {
           group.modules.forEach(module => {
@@ -216,20 +281,15 @@ export default function AddQuotePage() {
       }
     } catch (err) {
       console.error('Failed to fetch product groups with modules:', err);
-      throw err; // Re-throw for Promise.allSettled
+      throw err;
     }
   };
 
-  /**
-   * Fetch quote status choices
-   */
   const fetchStatusChoices = async () => {
     try {
       const response = await axiosInstance.get('/quote-status-choices/');
       if (response.status === 200) {
         setStatusChoices(response.data);
-
-        // Set default status to first option if available
         if (response.data.length > 0 && !quoteDetails.status) {
           setQuoteDetails(prev => ({
             ...prev,
@@ -239,20 +299,15 @@ export default function AddQuotePage() {
       }
     } catch (err) {
       console.error('Failed to fetch status choices:', err);
-      throw err; // Re-throw for Promise.allSettled
+      throw err;
     }
   };
 
-  /**
-   * Fetch quote item unit choices
-   */
   const fetchUnitChoices = async () => {
     try {
       const response = await axiosInstance.get('/quote-item-unit-choices/');
       if (response.status === 200) {
         setUnitChoices(response.data);
-
-        // Set default unit for initial row if not already set
         if (response.data.length > 0) {
           setItems(prev => prev.map(item =>
             item.unit === '' ? { ...item, unit: response.data[0].value } : item
@@ -261,19 +316,16 @@ export default function AddQuotePage() {
       }
     } catch (err) {
       console.error('Failed to fetch unit choices:', err);
-      throw err; // Re-throw for Promise.allSettled
+      throw err;
     }
   };
 
   const handleDetailChange = (field: string, value: string) => {
     setQuoteDetails(prev => {
       const updated = { ...prev, [field]: value };
-
-      // Clear POC when client changes
       if (field === 'client') {
         updated.poc = '';
       }
-
       return updated;
     });
     setErrors({});
@@ -283,12 +335,9 @@ export default function AddQuotePage() {
     setItems(prev => prev.map(item => {
       if (item.id === id) {
         const updated = { ...item, [field]: value };
-
-        // If group changes, clear the product selection
         if (field === 'group') {
           updated.product = '';
         }
-
         if (field === 'quantity' || field === 'unit_price') {
           updated.amount = updated.quantity * updated.unit_price;
         }
@@ -321,65 +370,28 @@ export default function AddQuotePage() {
     return item.quantity * item.unit_price;
   };
 
-  // Calculate totals
   const subTotal = items.reduce((sum, item) => sum + item.amount, 0);
   const taxAmount = (subTotal * taxPercentage) / 100;
   const total = subTotal + taxAmount;
-
-  // Cost calculations
   const totalCost = total * 1;
-  const inHouse = totalCost;
-  const outsourced = 0;
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Validation
-    if (!quoteDetails.client) {
-      setErrors({ general: 'Please select a client' });
-      return;
-    }
-
-    if (!quoteDetails.status) {
-      setErrors({ general: 'Please select a status' });
-      return;
-    }
-
-    if (!quoteDetails.quoteName?.trim()) {
-      setErrors({ general: 'Please enter a quote name' });
-      return;
-    }
-
-    if (items.length === 0 || !items.some(item => item.product && item.quantity > 0)) {
-      setErrors({ general: 'Please add at least one item with product and quantity' });
-      return;
-    }
-
     setIsSaving(true);
+    setErrors({});
 
     try {
-      // Find selected client
       const selectedClient = clients.find(c => c.company_name === quoteDetails.client);
-      if (!selectedClient) {
-        setErrors({ general: 'Invalid client selected' });
-        setIsSaving(false);
-        return;
-      }
-
-      // Find selected POC ID (optional)
+      
       let pocId: number | null = null;
-      if (quoteDetails.poc) {
+      if (selectedClient && quoteDetails.poc) {
         const selectedPoc = selectedClient.pocs.find(p => p.poc_name === quoteDetails.poc);
         pocId = selectedPoc ? selectedPoc.id : null;
       }
 
-      // Map items to API format
       const quoteItems = items
-        .filter(item => item.product && item.quantity > 0) // Only include valid items
         .map(item => {
-          // Find the service/product ID
           const service = services.find(s => s.product_service_name === item.product);
-
           return {
             product_service: service ? parseInt(service.id) : null,
             description: item.description || '',
@@ -387,45 +399,55 @@ export default function AddQuotePage() {
             unit: item.unit,
             price_per_unit: item.unit_price.toFixed(2)
           };
-        })
-        .filter(item => item.product_service !== null); // Remove items without valid product
+        });
 
-      if (quoteItems.length === 0) {
-        setErrors({ general: 'Please select valid products for all items' });
-        setIsSaving(false);
-        return;
-      }
-
-      // Build the payload
-      const payload = {
-        quote_name: quoteDetails.quoteName.trim(),
+      const payload = projectId ? {
+        project_name: quoteDetails.quoteName?.trim() || '',
+        start_date: quoteDetails.dateOfIssue,
+        end_date: quoteDetails.dueDate,
+        client: selectedClient?.id || null,
+        status: quoteDetails.status,
+      } : {
+        quote_name: quoteDetails.quoteName?.trim() || '',
         date_of_issue: quoteDetails.dateOfIssue,
         due_date: quoteDetails.dueDate,
-        client: selectedClient.id,
-        ...(pocId && { poc: pocId }), // Include POC only if selected
+        client: selectedClient?.id || null,
+        status: quoteDetails.status,
+        ...(pocId && { poc: pocId }),
         items: quoteItems
       };
 
-      console.log('Submitting quote:', payload);
+      let response;
+      if (isEditMode) {
+        const endpoint = projectId ? `/projects/${projectId}/` : `/quotes/${quoteId}/`;
+        response = await axiosInstance.put(endpoint, payload);
+      } else {
+        response = await axiosInstance.post('/quotes/', payload);
+      }
 
-      const response = await axiosInstance.post('/quotes/', payload);
-
-      if (response.status === 201 || response.status === 200) {
-        console.log('Quote created successfully:', response.data);
-        // Navigate to pipeline or show success message
-        navigate('/pipeline');
+      if (response.status >= 200 && response.status < 300) {
+        toast.success(`${projectId ? 'Project' : 'Quote'} ${isEditMode ? 'updated' : 'created'} successfully`);
+        navigate(projectId ? `/projects/${projectId}` : '/pipeline');
       }
     } catch (error: any) {
-      console.error('Failed to create quote:', error);
+      console.error('Failed to save:', error);
       const apiErrors = parseApiErrors(error);
       setErrors(apiErrors);
+
+      // Prioritize general error, otherwise show the first field error
+      const errorMessage = apiErrors.general || Object.values(apiErrors)[0];
+
+      if (typeof errorMessage === 'string') {
+        toast.error(errorMessage);
+      } else {
+        toast.error(`Failed to ${isEditMode ? 'update' : 'create'} ${projectId ? 'project' : 'quote'}`);
+      }
     } finally {
       setIsSaving(false);
     }
   };
 
   const handleClientAdded = (newClient: any) => {
-    // Convert to Client format with pocs array
     const clientWithPocs: Client = {
       ...newClient,
       pocs: newClient.pocs || []
@@ -435,7 +457,6 @@ export default function AddQuotePage() {
   };
 
   const handleServiceAdded = (newService: any) => {
-    // Convert ModulesTab format to Service format
     const formattedService: Service = {
       id: newService.id,
       product_service_name: newService.product_service_name,
@@ -443,8 +464,6 @@ export default function AddQuotePage() {
       product_group: newService.product_group
     };
     setServices(prev => [...prev, formattedService]);
-
-    // Refresh the full data to keep groups and modules in sync
     fetchProductGroupsWithModules();
   };
 
@@ -452,8 +471,6 @@ export default function AddQuotePage() {
     <Layout userRole="admin" currentPage="pipeline" onNavigate={() => { }}>
       <div className="px-2 sm:px-4 md:px-6 lg:px-8">
         <div className="max-w-[1600px] mx-auto py-4 sm:py-6 md:py-8">
-
-          {/* Breadcrumb Navigation */}
           <div className="flex items-center gap-2 text-xs sm:text-sm mb-4 sm:mb-6">
             <button
               onClick={() => navigate('/pipeline')}
@@ -461,30 +478,26 @@ export default function AddQuotePage() {
             >
               <ArrowLeft size={16} className="hidden sm:block" />
               <ArrowLeft size={14} className="sm:hidden" />
-              Pipeline
+              {projectId ? 'Project Details' : 'Pipeline'}
             </button>
             <span className="text-gray-400">/</span>
-            <span className="text-gray-700 font-medium">Add Quote Details</span>
+            <span className="text-gray-700 font-medium">{isEditMode ? 'Edit' : 'Add'} {projectId ? 'Project' : 'Quote'} Details</span>
           </div>
 
           <div className="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden relative">
-
-            {/* Loading Overlay */}
             {isLoadingData && (
               <div className="absolute inset-0 bg-white/70 backdrop-blur-sm z-20 flex items-center justify-center">
                 <div className="text-center">
                   <div className="inline-block animate-spin rounded-full h-12 w-12 border-4 border-gray-200 border-t-blue-600 mb-4"></div>
-                  <p className="text-gray-600 font-medium">Loading quote data...</p>
+                  <p className="text-gray-600 font-medium">Loading {projectId ? 'project' : 'quote'} data...</p>
                 </div>
               </div>
             )}
 
-            {/* Header Section */}
             <div className="p-4 sm:p-6 md:p-8 border-b border-gray-100">
-              <h1 className="text-lg sm:text-xl font-bold text-gray-800 mb-6 sm:mb-8">Add Quote Details</h1>
+              <h1 className="text-lg sm:text-xl font-bold text-gray-800 mb-6 sm:mb-8">{isEditMode ? 'Edit' : 'Add'} {projectId ? 'Project' : 'Quote'} Details</h1>
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-x-8 lg:gap-x-24 gap-y-4 sm:gap-y-6">
-                {/* Left Column */}
                 <div className="space-y-4 sm:space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] items-start sm:items-center gap-2 sm:gap-6">
                     <label className="text-sm sm:text-base font-medium text-gray-700">Date of Issue</label>
@@ -521,15 +534,12 @@ export default function AddQuotePage() {
                         onClick={() => setIsAddClientModalOpen(true)}
                         className="flex-shrink-0 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors shadow-md hover:shadow-lg active:scale-95"
                         title="Add New Client"
-                        aria-label="Add New Client"
                       >
-                        <Plus size={18} className="sm:hidden" strokeWidth={2.5} />
-                        <Plus size={20} className="hidden sm:block" strokeWidth={2.5} />
+                        <Plus size={20} strokeWidth={2.5} />
                       </button>
                     </div>
                   </div>
 
-                  {/* POC Dropdown - Shows after client is selected */}
                   <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] items-start sm:items-center gap-2 sm:gap-6">
                     <label className="text-sm sm:text-base font-medium text-gray-700">POC (Optional)</label>
                     <div className="relative">
@@ -555,10 +565,10 @@ export default function AddQuotePage() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] items-start sm:items-center gap-2 sm:gap-6">
-                    <label className="text-sm sm:text-base font-medium text-gray-700">Quote Name</label>
+                    <label className="text-sm sm:text-base font-medium text-gray-700">{projectId ? 'Project' : 'Quote'} Name</label>
                     <input
                       type="text"
-                      placeholder="Enter Quote Name"
+                      placeholder={`Enter ${projectId ? 'Project' : 'Quote'} Name`}
                       value={quoteDetails.quoteName}
                       onChange={(e) => handleDetailChange('quoteName', e.target.value)}
                       className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
@@ -566,14 +576,12 @@ export default function AddQuotePage() {
                   </div>
                 </div>
 
-                {/* Right Column */}
                 <div className="space-y-4 sm:space-y-5">
                   <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] items-start sm:items-center gap-2 sm:gap-6">
                     <label className="text-sm sm:text-base font-medium text-gray-700">Author</label>
                     <input
                       type="text"
                       value={quoteDetails.author}
-                      onChange={(e) => handleDetailChange('author', e.target.value)}
                       className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base bg-gray-50 focus:outline-none"
                       readOnly
                     />
@@ -610,11 +618,8 @@ export default function AddQuotePage() {
               </div>
             </div>
 
-            {/* Line Items Table Section */}
             <div className="p-4 sm:p-6 md:p-8 pb-0">
-              {/* Desktop Table View - Hidden on mobile */}
               <div className="hidden lg:block">
-                {/* Table Header */}
                 <div className="grid grid-cols-[50px_140px_2fr_200px_140px_140px_50px] gap-4 mb-2 text-sm font-semibold text-gray-700 px-2">
                   <div></div>
                   <div>Group</div>
@@ -629,13 +634,9 @@ export default function AddQuotePage() {
                   {items.map((item) => (
                     <div key={item.id} className="group border-b border-gray-100 py-4 hover:bg-gray-50 transition-colors">
                       <div className="grid grid-cols-[50px_140px_2fr_200px_140px_140px_50px] gap-4 items-start px-2">
-
-                        {/* Drag Handle */}
                         <div className="flex justify-center pt-2.5 cursor-move text-gray-400 hover:text-gray-600">
                           <GripVertical size={18} />
                         </div>
-
-                        {/* Group */}
                         <div>
                           <div className="relative">
                             <select
@@ -653,8 +654,6 @@ export default function AddQuotePage() {
                             <ChevronDown size={14} className="absolute right-2 top-3 text-gray-400 pointer-events-none" />
                           </div>
                         </div>
-
-                        {/* Product & Description */}
                         <div className="space-y-2">
                           <div className="flex gap-2 items-center">
                             <div className="relative flex-1">
@@ -665,7 +664,7 @@ export default function AddQuotePage() {
                                 disabled={!item.group}
                               >
                                 <option value="">
-                                  {!item.group ? 'Select product group first' : 'Select product or service'}
+                                  {!item.group ? 'Select group first' : 'Select product'}
                                 </option>
                                 {item.group && services
                                   .filter(service => service.product_group === item.group)
@@ -680,9 +679,7 @@ export default function AddQuotePage() {
                             <button
                               type="button"
                               onClick={() => setIsAddServiceModalOpen(true)}
-                              className="flex-shrink-0 flex items-center justify-center w-9 h-9 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors shadow-sm hover:shadow-md active:scale-95"
-                              title="Add New Service"
-                              aria-label="Add New Service"
+                              className="flex-shrink-0 flex items-center justify-center w-9 h-9 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors shadow-sm"
                             >
                               <Plus size={16} strokeWidth={2.5} />
                             </button>
@@ -694,8 +691,6 @@ export default function AddQuotePage() {
                             className="w-full px-3 py-2.5 border border-gray-300 rounded text-sm text-gray-600 h-20 resize-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                           />
                         </div>
-
-                        {/* Quantity & Unit */}
                         <div className="flex space-x-2">
                           <input
                             type="number"
@@ -719,8 +714,6 @@ export default function AddQuotePage() {
                             <ChevronDown size={14} className="absolute right-1 top-3 text-gray-400 pointer-events-none" />
                           </div>
                         </div>
-
-                        {/* Unit Price */}
                         <div>
                           <input
                             type="number"
@@ -730,32 +723,24 @@ export default function AddQuotePage() {
                             className="w-full px-3 py-2.5 border border-gray-300 rounded text-sm text-right focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 placeholder-gray-400"
                           />
                         </div>
-
-                        {/* Amount */}
                         <div className="pt-2.5 text-right text-sm font-bold text-gray-800">
                           {calculateRowTotal(item).toFixed(2)}
-                          <div className="text-gray-300 font-normal mt-1 text-xs">0.00</div>
                         </div>
-
-                        {/* Delete Action */}
                         <button
                           onClick={() => removeRow(item.id)}
                           className="flex justify-center pt-2.5 text-gray-300 hover:text-red-500 transition-colors"
                         >
                           <Trash2 size={16} />
                         </button>
-
                       </div>
                     </div>
                   ))}
                 </div>
               </div>
 
-              {/* Mobile Card View - Visible on mobile only */}
               <div className="lg:hidden space-y-4">
                 {items.map((item, index) => (
                   <div key={item.id} className="bg-gray-50 border border-gray-200 rounded-lg p-4 space-y-3">
-                    {/* Card Header */}
                     <div className="flex items-center justify-between mb-3">
                       <div className="flex items-center gap-2">
                         <GripVertical size={16} className="text-gray-400" />
@@ -768,8 +753,6 @@ export default function AddQuotePage() {
                         <Trash2 size={16} />
                       </button>
                     </div>
-
-                    {/* Group */}
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Product Group</label>
                       <div className="relative">
@@ -788,8 +771,6 @@ export default function AddQuotePage() {
                         <ChevronDown size={14} className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
                       </div>
                     </div>
-
-                    {/* Product */}
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Product/Service</label>
                       <div className="flex gap-2">
@@ -817,14 +798,11 @@ export default function AddQuotePage() {
                           type="button"
                           onClick={() => setIsAddServiceModalOpen(true)}
                           className="flex-shrink-0 flex items-center justify-center w-9 h-9 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors"
-                          title="Add New Service"
                         >
                           <Plus size={16} strokeWidth={2.5} />
                         </button>
                       </div>
                     </div>
-
-                    {/* Description */}
                     <div>
                       <label className="block text-xs font-medium text-gray-700 mb-1">Description</label>
                       <textarea
@@ -834,8 +812,6 @@ export default function AddQuotePage() {
                         className="w-full px-3 py-2 border border-gray-300 rounded text-sm text-gray-600 h-16 resize-none focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                       />
                     </div>
-
-                    {/* Quantity and Unit */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Quantity</label>
@@ -865,8 +841,6 @@ export default function AddQuotePage() {
                         </div>
                       </div>
                     </div>
-
-                    {/* Unit Price and Amount */}
                     <div className="grid grid-cols-2 gap-3">
                       <div>
                         <label className="block text-xs font-medium text-gray-700 mb-1">Unit Price</label>
@@ -889,7 +863,6 @@ export default function AddQuotePage() {
                 ))}
               </div>
 
-              {/* Table Actions */}
               <div className="flex flex-wrap items-center gap-2 sm:gap-3 mt-6 mb-6 sm:mb-8">
                 <button
                   onClick={addNewRow}
@@ -897,33 +870,16 @@ export default function AddQuotePage() {
                 >
                   Add New Row
                 </button>
-                <button className="px-4 sm:px-5 py-2 sm:py-2.5 bg-blue-600 text-white text-sm font-semibold rounded hover:bg-blue-700 transition-colors shadow-sm">
-                  Add Sub Row
-                </button>
-                <button className="px-4 sm:px-5 py-2 sm:py-2.5 bg-blue-600 text-white text-sm font-semibold rounded hover:bg-blue-700 transition-colors shadow-sm">
-                  Add Product Group
-                </button>
-
               </div>
             </div>
 
-
-            {/* Footer & Totals Section */}
             <div className="bg-white px-4 sm:px-6 md:px-8 py-4 sm:py-6 mb-8 sm:mb-12">
               <div className="flex flex-col lg:flex-row justify-end items-start gap-8 lg:gap-12">
-
-                {/* Totals Calculation */}
                 <div className="w-full lg:w-80 space-y-3">
                   <div className="flex justify-between items-center text-sm">
                     <span className="font-semibold text-gray-800">Sub Total</span>
                     <span className="text-gray-700">{subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
-
-                  <div className="flex justify-between items-center text-sm">
-                    <span className="font-semibold text-gray-800">Some without tax</span>
-                    <span className="text-gray-700">{subTotal.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
-                  </div>
-
                   <div className="flex justify-between items-center text-sm">
                     <span className="font-semibold text-gray-800">Tax</span>
                     <div className="flex items-center gap-3">
@@ -943,66 +899,42 @@ export default function AddQuotePage() {
                       <span className="text-gray-700 w-20 text-right">{taxAmount.toFixed(2)}</span>
                     </div>
                   </div>
-
                   <div className="flex justify-between items-center text-sm pt-3 border-t border-gray-200">
                     <span className="font-bold text-gray-800">Total</span>
                     <span className="text-gray-800 font-bold">{total.toLocaleString(undefined, { minimumFractionDigits: 2 })}</span>
                   </div>
                 </div>
 
-                {/* Right Side Stats */}
                 <div className="w-full lg:w-64 space-y-4 lg:border-l border-gray-200 lg:pl-8">
                   <div className="flex justify-between items-center text-sm">
                     <span className="font-semibold text-gray-800">Total Cost</span>
                     <div className="text-right">
                       <div className="font-bold text-gray-800">{totalCost.toLocaleString(undefined, { minimumFractionDigits: 2 })}</div>
-                      {/* <div className="text-gray-400 text-xs">60.00 %</div> */}
                     </div>
                   </div>
-
-                  <div className="flex justify-between items-center text-sm">
-                    {/* <span className="text-gray-600">In-house</span>
-                    <div className="text-right">
-                      <div className="font-bold text-gray-800">{inHouse.toLocaleString(undefined, {minimumFractionDigits: 2})}</div>
-                      <div className="text-gray-400 text-xs">60.00 %</div>
-                    </div> */}
-                  </div>
-
-                  <div className="flex justify-between items-center text-sm">
-                    {/* <span className="text-gray-600">Outsourced</span>
-                    <div className="text-right">
-                      <div className="font-bold text-gray-800">{outsourced}</div>
-                      <div className="text-gray-400 text-xs">0.00 %</div>
-                    </div> */}
-                  </div>
                 </div>
-
               </div>
             </div>
 
-            {/* Bottom Action Bar */}
             <div className="p-4 sm:p-6 bg-white border-t border-gray-200 flex justify-center sticky bottom-0 z-10">
               <button
                 onClick={handleSubmit}
                 disabled={isSaving}
                 className="w-full sm:w-auto bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 px-8 sm:px-12 rounded shadow-md transition-all active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                {isSaving ? 'Saving...' : 'Save'}
+                {isSaving ? 'Saving...' : (isEditMode ? 'Update' : 'Save')} {projectId ? 'Project' : 'Quote'}
               </button>
             </div>
-
           </div>
         </div>
       </div>
 
-      {/* Add Client Modal */}
       <AddClientModal
         isOpen={isAddClientModalOpen}
         onClose={() => setIsAddClientModalOpen(false)}
         onClientAdded={handleClientAdded}
       />
 
-      {/* Add Service Modal - Using ModulesTab */}
       {isAddServiceModalOpen && (
         <ModulesTab
           isModalMode={true}

@@ -1,8 +1,8 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import type { Client, POC } from "../pages/ClientListPage";
 import { AddPOCModal } from "../components/AddPOCModal";
-import { MapPin, Phone, Building2, Paperclip, Briefcase, Edit3, X, Mail } from "lucide-react";
-
+import { MapPin, Phone, Building2, Edit3, X, Mail } from "lucide-react";
 
 interface ClientDetailsProps {
   client: Client;
@@ -13,6 +13,7 @@ interface ClientDetailsProps {
 }
 
 export function ClientDetailsPage({ client, pocs, onAddPOC, onEdit, onBack }: ClientDetailsProps) {
+  const navigate = useNavigate();
   const [isPOCModalOpen, setIsPOCModalOpen] = useState(false);
   const [selectedPOC, setSelectedPOC] = useState<POC | null>(null);
   const [isDetailsModalOpen, setIsDetailsModalOpen] = useState(false);
@@ -56,12 +57,20 @@ export function ClientDetailsPage({ client, pocs, onAddPOC, onEdit, onBack }: Cl
       {/* Header */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h2 className="text-3xl font-bold text-gray-900">{client.company_name}</h2>
-        <button
-          onClick={onEdit}
-          className="px-6 py-2.5 text-blue-600 font-semibold border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
-        >
-          Modify
-        </button>
+        <div className="flex gap-3">
+          <button
+            onClick={() => navigate('/pipeline/add-quote', { state: { clientName: client.company_name } })}
+            className="px-6 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 transition-colors shadow-md hover:shadow-lg"
+          >
+            Add Quote
+          </button>
+          <button
+            onClick={onEdit}
+            className="px-6 py-2.5 text-blue-600 font-semibold border border-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
+          >
+            Modify
+          </button>
+        </div>
       </div>
 
       {/* Info Cards Grid */}
@@ -246,5 +255,3 @@ export function ClientDetailsPage({ client, pocs, onAddPOC, onEdit, onBack }: Cl
     </div>
   );
 }
-
-

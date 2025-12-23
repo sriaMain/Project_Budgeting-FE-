@@ -138,7 +138,16 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                             </span>
                         </div>
                         <div className="flex gap-4">
-                            <button className="px-4 py-2 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200">
+                            <button
+                                onClick={() => navigate('/pipeline/add-quote', { state: { clientName: project.client_details?.company_name || project.client_details?.name } })}
+                                className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md"
+                            >
+                                + Add Quote
+                            </button>
+                            <button
+                                onClick={() => navigate(`/projects/edit/${projectId}`)}
+                                className="px-4 py-2 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200"
+                            >
                                 ✎ Modify Details
                             </button>
                             <button className="px-4 py-2 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200">

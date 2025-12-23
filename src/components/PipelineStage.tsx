@@ -1,9 +1,5 @@
-/**
- * Pipeline Stage Column Component
- * Displays a single stage with its quotes in the pipeline
- */
-
 import React from 'react';
+import { Droppable } from '@hello-pangea/dnd';
 import { QuoteCard } from './QuoteCard';
 import type { StageColumn, Quote } from '../types/pipeline.types';
 
@@ -38,18 +34,33 @@ export const PipelineStage: React.FC<PipelineStageProps> = ({ stage, onQuoteClic
         </div>
       </div>
 
-      {/* Quotes List */}
-      <div className={`${colorClass} rounded-b-lg border-2 border-t-0 p-3 min-h-[400px] max-h-[calc(100vh-350px)] overflow-y-auto space-y-3`}>
-        {stage.quotes.length > 0 ? (
-          stage.quotes.map((quote) => (
-            <QuoteCard key={quote.quote_no} quote={quote} onClick={onQuoteClick} />
-          ))
-        ) : (
-          <div className="text-center text-gray-400 text-sm py-8">
-            No quotes in this stage
+      {/* Quotes List - Droppable */}
+      <Droppable droppableId={stage.stage}>
+        {(provided, snapshot) => (
+          <div
+            ref={provided.innerRef}
+            {...provided.droppableProps}
+            className={`${colorClass} rounded-b-lg border-2 border-t-0 p-3 min-h-[400px] max-h-[calc(100vh-350px)] overflow-y-auto space-y-3 transition-colors ${snapshot.isDraggingOver ? 'bg-opacity-50 ring-2 ring-inset ring-blue-300' : ''
+              }`}
+          >
+            {stage.quotes.length > 0 ? (
+              stage.quotes.map((quote, index) => (
+                <QuoteCard
+                  key={quote.quote_no}
+                  quote={quote}
+                  index={index}
+                  onClick={onQuoteClick}
+                />
+              ))
+            ) : (
+              <div className="text-center text-gray-400 text-sm py-8">
+                No quotes in this stage
+              </div>
+            )}
+            {provided.placeholder}
           </div>
         )}
-      </div>
+      </Droppable>
     </div>
   );
 };

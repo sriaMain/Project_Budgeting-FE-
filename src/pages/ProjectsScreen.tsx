@@ -110,7 +110,7 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 				status: p.status || 'In Progress', // Default if missing
 				progress: p.progress || 0, // Default if missing
 				income: p.budget?.total_budget ? Number(p.budget.total_budget) : 0, // Use budget as proxy or 0
-				forecasted_profit: p.forecasted_profit || 0, // Default if missing
+				forecasted_profit: p.budget?.forecasted_profit || 0, // Default if missing
 				budget: p.budget
 			}));
 
@@ -211,7 +211,7 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 							<div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-200 bg-white text-xs font-semibold text-gray-500 uppercase tracking-wider">
 								<div className="col-span-4">Project Name | Client</div>
 								<div className="col-span-2">Due date</div>
-								<div className="col-span-2">Progress</div>
+								{/* <div className="col-span-2">Progress</div> */}
 								<div className="col-span-1">Income</div>
 								<div className="col-span-2">Forecasted Profit</div>
 								<div className="col-span-1">Status</div>
@@ -252,9 +252,9 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 														<div className="col-span-2 text-sm text-gray-900 font-medium">
 															{project.end_date}
 														</div>
-														<div className="col-span-2">
+														{/* <div className="col-span-2">
 															<ProgressBar value={project.progress} />
-														</div>
+														</div> */}
 														<div className="col-span-1 text-sm text-gray-900 font-medium">
 															{project.income ? `${project.income} INR` : 'N/A'}
 														</div>

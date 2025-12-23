@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { LoginForm } from "./pages/LoginForm";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
+import { Toaster } from 'react-hot-toast';
 import { ForgotPasswordForm } from "./pages/ForgotPasswordForm";
 import VerificationScreen from "./pages/VerificationScreen";
 import CreatePasswordScreen from "./pages/CreatePasswordScreen";
@@ -33,6 +34,7 @@ const App: React.FC = () => {
 
   return (
     <main className="min-h-screen w-full flex items-center justify-center bg-white p-4 sm:p-6 lg:p-8">
+      <Toaster position="top-right" />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<LoginForm />} />
@@ -134,6 +136,26 @@ const App: React.FC = () => {
           {/* Protect Add Quote */}
           <Route
             path="/pipeline/add-quote"
+            element={
+              <ProtectedRoute>
+                <AddQuotePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Edit Quote */}
+          <Route
+            path="/pipeline/edit-quote/:quoteId"
+            element={
+              <ProtectedRoute>
+                <AddQuotePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Edit Project */}
+          <Route
+            path="/projects/edit/:projectId"
             element={
               <ProtectedRoute>
                 <AddQuotePage />

@@ -1,16 +1,17 @@
 /**
  * Quote Details Page
  * Displays detailed information about a specific quote
- * Matches the reference design exactly
  */
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Edit, FileText, Share2, Send } from 'lucide-react';
+import { Edit, FileText, Share2, Send, Receipt, Loader2 } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { InfoDisplay } from '../components/InfoDisplay';
 import { ReusableTable, type Column } from '../components/ReusableTable';
 import { CreateProjectModal } from '../components/CreateProjectModal';
+import axiosInstance from '../utils/axiosInstance';
+import { toast } from 'react-hot-toast';
 
 interface QuoteDetailsPageProps {
     userRole?: 'admin' | 'user';
@@ -20,15 +21,35 @@ interface QuoteDetailsPageProps {
 
 interface ProductRow {
     id: string;
-    productGroup: string;
-    productName: string;
-    quantity: string;
+    product_group: string;
+    product_name: string;
+    quantity: number | string;
     unit: string;
-    unitPrice: string;
+    price_per_unit: string;
     amount: string;
     cost: string;
-    po: string;
-    bri: string;
+    po_number: string | null;
+    bill_number: string | null;
+}
+
+interface QuoteData {
+    quote_no: number;
+    quote_name: string;
+    date_of_issue: string;
+    due_date: string;
+    status: string;
+    author: string;
+    client: {
+        company_name: string;
+        street_address: string;
+        city: string;
+        state: string;
+        country: string;
+    };
+    sub_total: string;
+    tax_percentage: string;
+    total_amount: string;
+    items: ProductRow[];
 }
 
 export default function QuoteDetailsPage({
@@ -39,146 +60,139 @@ export default function QuoteDetailsPage({
     const { quoteNo } = useParams<{ quoteNo: string }>();
     const navigate = useNavigate();
     const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+    const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    const [isActionLoading, setIsActionLoading] = useState(false);
 
-    // Static data for demonstration (as requested)
-    const quoteData = {
-        quoteNo: quoteNo || '40',
-        author: 'Vigranth Kumar',
-        dateOfIssue: '25-10-2025',
-        dueDate: '25-12-2025',
-        quoteName: 'Client A quote',
-        status: 'Opportunity',
-        client: 'Client A',
-        clientSubtitle: 'Project Essentials Template'
+    useEffect(() => {
+        fetchQuoteDetails();
+    }, [quoteNo]);
+
+    const fetchQuoteDetails = async () => {
+        try {
+            setIsLoading(true);
+            const response = await axiosInstance.get(`/quotes/${quoteNo}/`);
+            setQuoteData(response.data);
+        } catch (error) {
+            console.error('Error fetching quote details:', error);
+            toast.error('Failed to load quote details');
+        } finally {
+            setIsLoading(false);
+        }
     };
 
-    // Static product data matching the reference design
-    const products: ProductRow[] = [
-        {
-            id: '1',
-            productGroup: 'Subvest',
-            productName: 'Subvest',
-            quantity: '0.00',
-            unit: 'Total',
-            unitPrice: '0.00',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
-        },
-        {
-            id: '2',
-            productGroup: '',
-            productName: 'In-house',
-            quantity: '0.00',
-            unit: '',
-            unitPrice: '0.00',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
-        },
-        {
-            id: '3',
-            productGroup: '',
-            productName: 'Out-Sourced',
-            quantity: '0.00',
-            unit: '',
-            unitPrice: '0.00',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
-        },
-        {
-            id: '4',
-            productGroup: 'Total/MI',
-            productName: '',
-            quantity: '0.00',
-            unit: '',
-            unitPrice: '',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
-        },
-        {
-            id: '5',
-            productGroup: 'Inclusive Synoptic',
-            productName: '',
-            quantity: '0.00',
-            unit: '',
-            unitPrice: '',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
-        },
-        {
-            id: '6',
-            productGroup: 'To be Scoped (TBS)',
-            productName: '',
-            quantity: '0.00',
-            unit: '',
-            unitPrice: '',
-            amount: '0.00',
-            cost: '0.00',
-            po: '',
-            bri: ''
+    const handleSend = async () => {
+        try {
+            setIsActionLoading(true);
+            await axiosInstance.post(`/quotes/${quoteNo}/send/`);
+            toast.success('Quote sent successfully');
+        } catch (error) {
+            console.error('Error sending quote:', error);
+            toast.error('Failed to send quote');
+        } finally {
+            setIsActionLoading(false);
         }
-    ];
+    };
 
-    // Define table columns for products
-    const productColumns: Column<ProductRow>[] = [
-        {
-            header: 'Product Group',
-            accessor: 'productGroup',
-            className: 'font-medium'
-        },
-        {
-            header: 'Product Name',
-            accessor: 'productName'
-        },
-        {
-            header: 'Quantity',
-            accessor: 'quantity',
-            className: 'text-right'
-        },
-        {
-            header: 'Unit',
-            accessor: 'unit'
-        },
-        {
-            header: 'Unit Price',
-            accessor: 'unitPrice',
-            className: 'text-right'
-        },
-        {
-            header: 'Amount',
-            accessor: 'amount',
-            className: 'text-right'
-        },
-        {
-            header: 'Cost',
-            accessor: 'cost',
-            className: 'text-right'
-        },
-        {
-            header: 'PO',
-            accessor: 'po',
-            className: 'text-center'
-        },
-        {
-            header: 'BRI',
-            accessor: 'bri',
-            className: 'text-center'
+    const handleInvoice = async () => {
+        try {
+            setIsActionLoading(true);
+            await axiosInstance.post(`/quotes/${quoteNo}/invoice/`);
+            toast.success('Invoice created successfully');
+        } catch (error) {
+            console.error('Error creating invoice:', error);
+            toast.error('Failed to create invoice');
+        } finally {
+            setIsActionLoading(false);
         }
+    };
+
+    const handleShare = async () => {
+        try {
+            setIsActionLoading(true);
+            await axiosInstance.post(`/quotes/${quoteNo}/send/`);
+
+            // Copy current URL to clipboard
+            await navigator.clipboard.writeText(window.location.href);
+
+            toast.success('Link copied to clipboard');
+        } catch (error) {
+            console.error('Error sharing quote:', error);
+            toast.error('Failed to share quote');
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const handleDownloadPDF = async () => {
+        try {
+            setIsActionLoading(true);
+            const response = await axiosInstance.get(`/quotes/${quoteNo}/invoice/`, {
+                responseType: 'blob'
+            });
+
+            // Create a blob from the response data
+            const file = new Blob([response.data], { type: 'application/pdf' });
+
+            // Create a link element, set the href to the blob, and trigger a click
+            const fileURL = URL.createObjectURL(file);
+            const link = document.createElement('a');
+            link.href = fileURL;
+            link.setAttribute('download', `Quote_${quoteNo}.pdf`);
+            document.body.appendChild(link);
+            link.click();
+
+            // Cleanup
+            link.remove();
+            URL.revokeObjectURL(fileURL);
+
+            toast.success('PDF generated successfully');
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            toast.error('Failed to generate PDF');
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const productColumns: Column<ProductRow>[] = [
+        { header: 'Product Group', accessor: 'product_group', className: 'font-medium' },
+        { header: 'Product Name', accessor: 'product_name' },
+        { header: 'Quantity', accessor: 'quantity', className: 'text-right' },
+        { header: 'Unit', accessor: 'unit' },
+        { header: 'Unit Price', accessor: 'price_per_unit', className: 'text-right' },
+        { header: 'Amount', accessor: 'amount', className: 'text-right' },
+        { header: 'Cost', accessor: 'cost', className: 'text-right' },
+        { header: 'PO', accessor: 'po_number', className: 'text-center' },
+        { header: 'Bill No', accessor: 'bill_number', className: 'text-center' }
     ];
 
     const handleEdit = () => {
-        console.log('Edit quote:', quoteNo);
-        // TODO: Navigate to edit page or open edit modal
+        navigate(`/pipeline/edit-quote/${quoteNo}`);
     };
+
+    if (isLoading) {
+        return (
+            <Layout userRole={userRole} currentPage={currentPage} onNavigate={onNavigate}>
+                <div className="flex items-center justify-center min-h-[400px]">
+                    <Loader2 className="w-8 h-8 animate-spin text-blue-600" />
+                </div>
+            </Layout>
+        );
+    }
+
+    if (!quoteData) {
+        return (
+            <Layout userRole={userRole} currentPage={currentPage} onNavigate={onNavigate}>
+                <div className="text-center py-12">
+                    <p className="text-gray-500">Quote not found</p>
+                    <button onClick={() => navigate('/pipeline')} className="mt-4 text-blue-600 hover:underline">
+                        Back to Pipeline
+                    </button>
+                </div>
+            </Layout>
+        );
+    }
 
     return (
         <Layout userRole={userRole} currentPage={currentPage} onNavigate={onNavigate}>
@@ -186,73 +200,55 @@ export default function QuoteDetailsPage({
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-gray-900">Quote Details</h1>
-                    <button
-                        onClick={handleEdit}
-                        className="p-2 hover:bg-gray-100 rounded-lg transition-colors"
-                        aria-label="Edit quote"
-                    >
-                        <Edit size={20} className="text-gray-600" />
-                    </button>
+                    <div className="flex gap-4">
+                        <button
+                            onClick={() => navigate('/pipeline/add-quote', { state: { clientName: quoteData.client.company_name } })}
+                            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md"
+                        >
+                            + Add Another Quote
+                        </button>
+                        <button
+                            onClick={handleEdit}
+                            className="px-4 py-2 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200"
+                        >
+                            <Edit className="w-4 h-4 mr-2" />
+                        </button>
+                    </div>
                 </div>
 
                 {/* Quote Information Card */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                    {/* Info Grid */}
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-                        {/* Quote No */}
-                        <InfoDisplay label="Quote No" value={quoteData.quoteNo} />
-
-                        {/* Author */}
+                        <InfoDisplay label="Quote No" value={quoteData.quote_no} />
                         <InfoDisplay label="Author" value={quoteData.author} />
-
-                        {/* Date of Issue */}
-                        <InfoDisplay label="Date of Issue" value={quoteData.dateOfIssue} />
-
-                        {/* Due Date */}
-                        <InfoDisplay label="Due Date" value={quoteData.dueDate} />
-
-                        {/* Quote Name */}
-                        <InfoDisplay label="Quote Name" value={quoteData.quoteName} />
-
-                        {/* Status with Edit Button */}
+                        <InfoDisplay label="Date of Issue" value={quoteData.date_of_issue} />
+                        <InfoDisplay label="Due Date" value={quoteData.due_date} />
+                        <InfoDisplay label="Quote Name" value={quoteData.quote_name} />
                         <InfoDisplay
                             label="Status"
                             value={
-                                <div className="flex items-center gap-2">
-                                    <span className="inline-flex items-center bg-purple-100 text-purple-700 px-3 py-1 rounded text-sm font-medium">
-                                        {quoteData.status}
-                                    </span>
-                                    <button
-                                        onClick={handleEdit}
-                                        className="p-1 hover:bg-gray-100 rounded transition-colors"
-                                        aria-label="Edit status"
-                                    >
-                                        <Edit size={16} className="text-gray-600" />
-                                    </button>
-                                </div>
+                                <span className="inline-flex items-center bg-purple-100 text-purple-700 px-3 py-1 rounded text-sm font-medium">
+                                    {quoteData.status}
+                                </span>
                             }
                         />
-
-                        {/* Client - Full Width */}
                         <div className="md:col-span-2">
                             <InfoDisplay
                                 label="Client"
                                 value={
                                     <div>
-                                        <span className="font-semibold">{quoteData.client}</span>
+                                        <span className="font-semibold">{quoteData.client.company_name}</span>
                                         <span className="text-sm text-gray-500 ml-2">
-                                            {quoteData.clientSubtitle}
+                                            {quoteData.client.city}, {quoteData.client.state}, {quoteData.client.country}
                                         </span>
                                     </div>
                                 }
                             />
                         </div>
-                    </div>
-
-                    <div className="pt-4 border-t border-gray-200">
+                                                    
                         <button
                             onClick={() => setIsCreateProjectModalOpen(true)}
-                            className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg"
+                            className="px-4 py-2 w-50 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200"
                         >
                             Create Project
                         </button>
@@ -263,25 +259,63 @@ export default function QuoteDetailsPage({
                 <div>
                     <h2 className="text-lg font-semibold text-gray-900 mb-4">Products</h2>
                     <ReusableTable
-                        data={products}
+                        data={quoteData.items.map((item, idx) => ({ ...item, id: idx.toString() }))}
                         columns={productColumns}
                         keyField="id"
                         emptyMessage="No products found"
                     />
+
+                    {/* Totals Section */}
+                    <div className="mt-6 flex justify-end">
+                        <div className="w-full max-w-xs space-y-2">
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-500">Sub Total:</span>
+                                <span className="font-medium">₹{parseFloat(quoteData.sub_total).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                                <span className="text-gray-500">Tax ({quoteData.tax_percentage}%):</span>
+                                <span className="font-medium">₹{(parseFloat(quoteData.total_amount) - parseFloat(quoteData.sub_total)).toLocaleString('en-IN')}</span>
+                            </div>
+                            <div className="flex justify-between text-lg font-bold border-t pt-2">
+                                <span>Total:</span>
+                                <span className="text-blue-600">₹{parseFloat(quoteData.total_amount).toLocaleString('en-IN')}</span>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 {/* Action Buttons */}
                 <div className="flex items-center gap-3 pb-6">
-                    <button className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium shadow-sm">
-                        <FileText size={18} />
+                    <button
+                        onClick={handleDownloadPDF}
+                        disabled={isActionLoading}
+                        className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium shadow-sm disabled:opacity-50"
+                    >
+                        {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <FileText size={18} />}
                         <span>PDF</span>
                     </button>
-                    <button className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium shadow-sm">
-                        <Share2 size={18} />
+                    <button
+                        onClick={handleShare}
+                        disabled={isActionLoading}
+                        className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium shadow-sm disabled:opacity-50"
+                    >
+                        {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 size={18} />}
                         <span>Share via link</span>
                     </button>
-                    <button className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg">
-                        <Send size={18} />
+                    {/* <button
+                        onClick={handleInvoice}
+                        disabled={isActionLoading}
+                        className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium shadow-sm disabled:opacity-50"
+                    >
+                        <Receipt size={18} />
+                        <span>Invoice</span>
+                    </button> */}
+                    <button
+                        onClick={handleSend}
+                        disabled={isActionLoading}
+                        className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-6 py-2.5 rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg disabled:opacity-50"
+                    >
+                        {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send size={18} />}
                         <span>Send</span>
                     </button>
                 </div>
@@ -291,7 +325,10 @@ export default function QuoteDetailsPage({
             <CreateProjectModal
                 isOpen={isCreateProjectModalOpen}
                 onClose={() => setIsCreateProjectModalOpen(false)}
-                quoteName={quoteData.quoteName}
+                quoteId={quoteData.quote_no}
+                quoteName={quoteData.quote_name}
+                clientName={quoteData.client.company_name}
+                authorName={quoteData.author}
             />
         </Layout>
     );

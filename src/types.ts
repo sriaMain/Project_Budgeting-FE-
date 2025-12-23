@@ -12,6 +12,7 @@ export interface FormErrors {
   password?: string;
   general?: string;
   captcha?: string;
+  [key: string]: string | undefined;
 }
 
 export type IconProps = React.SVGProps<SVGSVGElement>;
@@ -32,7 +33,7 @@ export interface Permission {
 
 export interface Role {
   id: number;
- role_name: string;
+  role_name: string;
   description: string;
   is_active: boolean;
   permissions: Permission[];

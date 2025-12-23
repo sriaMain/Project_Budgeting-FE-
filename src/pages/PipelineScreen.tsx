@@ -1,17 +1,15 @@
-/**
- * Pipeline Screen
- * Main component for opportunity/quote pipeline management
- */
-
 import React, { useState, useEffect } from 'react';
 import { Plus, SlidersHorizontal, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { DragDropContext, Droppable, type DropResult } from '@hello-pangea/dnd';
 import { Layout } from '../components/Layout';
 import { PipelineStatistics } from '../components/PipelineStatistics';
 import { PipelineStage } from '../components/PipelineStage';
 import { QuoteCard } from '../components/QuoteCard';
-import type { PipelineData, Quote } from '../types/pipeline.types';
+import type { PipelineData, Quote, PipelineStage as StageType } from '../types/pipeline.types';
 import axiosInstance from '../utils/axiosInstance';
+import { toast } from 'react-hot-toast';
+import { parseApiErrors } from '../utils/parseApiErrors';
 
 interface PipelineScreenProps {
   userRole?: 'admin' | 'user';
@@ -29,7 +27,7 @@ const STAGE_COLORS = {
 export default function PipelineScreen({
   userRole = 'admin',
   currentPage = 'pipeline',
-  onNavigate = () => {}
+  onNavigate = () => { }
 }: PipelineScreenProps) {
   const navigate = useNavigate();
   const [pipelineData, setPipelineData] = useState<PipelineData | null>(null);
@@ -55,16 +53,7 @@ export default function PipelineScreen({
       }
     } catch (err: any) {
       console.error('Failed to load pipeline data:', err);
-
-      if (err.response?.status === 404) {
-        setError('Pipeline data not found. Please contact support.');
-      } else if (err.response?.status === 500) {
-        setError('Server error. Please try again later.');
-      } else if (err.code === 'ERR_NETWORK') {
-        setError('Network error. Please check your connection.');
-      } else {
-        setError('Failed to load pipeline data. Please try again.');
-      }
+      setError('Failed to load pipeline data. Please try again.');
     } finally {
       setIsLoading(false);
     }
@@ -89,6 +78,94 @@ export default function PipelineScreen({
       else newSet.add(stageName);
       return newSet;
     });
+  };
+
+  const onDragEnd = async (result: DropResult) => {
+    const { destination, source, draggableId } = result;
+
+    // If no destination or dropped in same place, do nothing
+    if (!destination || (destination.droppableId === source.droppableId && destination.index === source.index)) {
+      return;
+    }
+
+    if (!pipelineData) return;
+
+    const sourceStageId = source.droppableId as StageType;
+    const destStageId = destination.droppableId as StageType;
+
+    // Find the quote being moved
+    const sourceStage = pipelineData.stages.find(s => s.stage === sourceStageId);
+    const destStage = pipelineData.stages.find(s => s.stage === destStageId);
+
+    if (!sourceStage || !destStage) return;
+
+    const movedQuote = sourceStage.quotes.find(q => q.quote_no.toString() === draggableId);
+    if (!movedQuote) return;
+
+    // Optimistically update UI
+    let newStages = [...pipelineData.stages];
+
+    if (sourceStageId === destStageId) {
+      // Reordering within the same stage
+      newStages = newStages.map(stage => {
+        if (stage.stage === sourceStageId) {
+          const newQuotes = Array.from(stage.quotes);
+          const [removed] = newQuotes.splice(source.index, 1);
+          newQuotes.splice(destination.index, 0, removed);
+          return { ...stage, quotes: newQuotes };
+        }
+        return stage;
+      });
+    } else {
+      // Moving between different stages
+      newStages = newStages.map(stage => {
+        if (stage.stage === sourceStageId) {
+          const newQuotes = Array.from(stage.quotes);
+          newQuotes.splice(source.index, 1);
+          return {
+            ...stage,
+            quotes: newQuotes,
+            count: stage.count - 1,
+            total_sum: stage.total_sum - parseFloat(movedQuote.quote_value)
+          };
+        }
+        if (stage.stage === destStageId) {
+          const newQuotes = Array.from(stage.quotes);
+          const updatedQuote = { ...movedQuote, status: destStage.title };
+          newQuotes.splice(destination.index, 0, updatedQuote);
+          return {
+            ...stage,
+            quotes: newQuotes,
+            count: stage.count + 1,
+            total_sum: stage.total_sum + parseFloat(movedQuote.quote_value)
+          };
+        }
+        return stage;
+      });
+    }
+
+    const oldData = { ...pipelineData };
+    setPipelineData({ ...pipelineData, stages: newStages });
+
+    if (sourceStageId !== destStageId) {
+      try {
+        // API call to update status
+        const response = await axiosInstance.put(`/quotes/${movedQuote.quote_no}/`, {
+          status: destStage.title
+        });
+
+        if (response.status !== 200 && response.status !== 204) {
+          throw new Error('Failed to update quote status');
+        }
+
+        toast.success(`Quote #${movedQuote.quote_no} moved to ${destStage.title}`);
+      } catch (err) {
+        console.error('Failed to update quote status:', err);
+        const apiErrors = parseApiErrors(err);
+        toast.error(apiErrors.general || 'Failed to move quote. Reverting changes.');
+        setPipelineData(oldData);
+      }
+    }
   };
 
   if (isLoading) {
@@ -151,17 +228,19 @@ export default function PipelineScreen({
         {/* Statistics */}
         <PipelineStatistics stats={pipelineData.stats} />
 
-        {/* Desktop View */}
+        {/* Desktop View - Board with Drag and Drop */}
         <div className="hidden md:block overflow-x-auto pb-4">
-          <div className="flex gap-4 min-w-max">
-            {pipelineData.stages.map(stage => (
-              <PipelineStage
-                key={stage.stage}
-                stage={stage}
-                onQuoteClick={handleQuoteClick}
-              />
-            ))}
-          </div>
+          <DragDropContext onDragEnd={onDragEnd}>
+            <div className="flex gap-4 min-w-max">
+              {pipelineData.stages.map(stage => (
+                <PipelineStage
+                  key={stage.stage}
+                  stage={stage}
+                  onQuoteClick={handleQuoteClick}
+                />
+              ))}
+            </div>
+          </DragDropContext>
         </div>
 
         {/* Mobile View */}
@@ -202,17 +281,31 @@ export default function PipelineScreen({
 
                 {/* Accordion Content */}
                 {isExpanded && (
-                  <div className={`${colorClass} p-3 space-y-3 border-t border-gray-300`}>
-                    {stage.quotes.length > 0 ? (
-                      stage.quotes.map(quote => (
-                        <QuoteCard key={quote.quote_no} quote={quote} onClick={handleQuoteClick} />
-                      ))
-                    ) : (
-                      <div className="text-center text-gray-400 text-sm py-8">
-                        No quotes in this stage
+                  <Droppable droppableId={`mobile-${stage.stage}`} isDropDisabled={true}>
+                    {(provided) => (
+                      <div
+                        ref={provided.innerRef}
+                        {...provided.droppableProps}
+                        className={`${colorClass} p-3 space-y-3 border-t border-gray-300`}
+                      >
+                        {stage.quotes.length > 0 ? (
+                          stage.quotes.map((quote, index) => (
+                            <QuoteCard
+                              key={quote.quote_no}
+                              quote={quote}
+                              index={index}
+                              onClick={handleQuoteClick}
+                            />
+                          ))
+                        ) : (
+                          <div className="text-center text-gray-400 text-sm py-8">
+                            No quotes in this stage
+                          </div>
+                        )}
+                        {provided.placeholder}
                       </div>
                     )}
-                  </div>
+                  </Droppable>
                 )}
               </div>
             );
