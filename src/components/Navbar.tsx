@@ -32,7 +32,7 @@ export const Navbar: React.FC<NavbarProps> = ({ userRole }) => {
     { label: 'Projects', icon: <Briefcase size={18} />, roles: ['admin', 'manager', 'user'], path: '/projects' },
     { label: 'Reports', icon: <FileText size={18} />, roles: ['admin', 'manager'], path: '/reports' },
     { label: 'Contacts', icon: <Users size={18} />, roles: ['admin', 'manager', 'user'], path: '/contacts' },
-    { label: 'Tasks', icon: <CheckSquare size={18} />, roles: ['admin', 'manager', 'user'], path: '/tasks' },
+    { label: 'Tasks', icon: <CheckSquare size={18} />, roles: ['admin', 'manager', 'user'], path: '/task-management' },
     { label: 'Administration', icon: <Settings size={18} />, roles: ['admin'], path: '/administration' },
   ];
 

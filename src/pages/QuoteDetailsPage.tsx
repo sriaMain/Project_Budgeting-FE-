@@ -202,12 +202,6 @@ export default function QuoteDetailsPage({
                     <h1 className="text-2xl font-bold text-gray-900">Quote Details</h1>
                     <div className="flex gap-4">
                         <button
-                            onClick={() => navigate('/pipeline/add-quote', { state: { clientName: quoteData.client.company_name } })}
-                            className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md"
-                        >
-                            + Add Another Quote
-                        </button>
-                        <button
                             onClick={handleEdit}
                             className="px-4 py-2 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200"
                         >
@@ -245,7 +239,7 @@ export default function QuoteDetailsPage({
                                 }
                             />
                         </div>
-                                                    
+
                         <button
                             onClick={() => setIsCreateProjectModalOpen(true)}
                             className="px-4 py-2 w-50 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200"

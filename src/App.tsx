@@ -11,6 +11,7 @@ import AdministrationScreen from "./pages/AdministrationScreen";
 import ProjectsScreen from "./pages/ProjectsScreen";
 import ProtectedRoute from "./auth/ProtectedRoute";
 import ProjectDetailsPage from "./pages/ProjectDetailsPage";
+import TaskManagement from "./pages/TaskManagement";
 import ContactsScreen from "./pages/ContactsScreen";
 import PipelineScreen from "./pages/PipelineScreen";
 import QuoteDetailsPage from "./pages/QuoteDetailsPage";
@@ -125,6 +126,20 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <QuoteDetailsPage
+                  userRole={userRole}
+                  currentPage={currentPage}
+                  onNavigate={handleNavigate}
+                />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Task Management */}
+          <Route
+            path="/task-management"
+            element={
+              <ProtectedRoute>
+                <TaskManagement
                   userRole={userRole}
                   currentPage={currentPage}
                   onNavigate={handleNavigate}
