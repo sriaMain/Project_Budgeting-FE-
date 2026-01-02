@@ -16,11 +16,15 @@ import ContactsScreen from "./pages/ContactsScreen";
 import PipelineScreen from "./pages/PipelineScreen";
 import QuoteDetailsPage from "./pages/QuoteDetailsPage";
 import AddQuotePage from "./pages/AddQuotePage";
+import ProfilePage from "./pages/ProfilePage";
 import { initializeAuth } from "./auth/authThunk";
+import { useAppSelector } from "./hooks/useAppSelector";
 
 const App: React.FC = () => {
   const [currentPage, setCurrentPage] = useState<string>("dashboard");
-  const [userRole, setUserRole] = useState<"admin" | "user">("admin");
+  // Get userRole from Redux store - this will be set after login
+  const userRole = useAppSelector((state) => state.auth.userRole) || "user";
+
   const handleNavigate = (page: string) => {
     setCurrentPage(page);
   };
@@ -140,6 +144,20 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <TaskManagement
+                  userRole={userRole}
+                  currentPage={currentPage}
+                  onNavigate={handleNavigate}
+                />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Profile Page */}
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <ProfilePage
                   userRole={userRole}
                   currentPage={currentPage}
                   onNavigate={handleNavigate}

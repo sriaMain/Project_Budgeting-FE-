@@ -266,10 +266,10 @@ export function AddTaskModal({
         user.email?.toLowerCase().includes(assigneeSearch.toLowerCase())
     );
 
-    const filteredProjects = projects.filter(project =>
+    const filteredProjects = Array.isArray(projects) ? projects.filter(project =>
         project.project_name?.toLowerCase().includes(projectSearch.toLowerCase()) ||
         project.project_no?.toString().includes(projectSearch)
-    );
+    ) : [];
 
     const handleAssigneeSelect = (user: User) => {
         setSelectedAssignee(user);

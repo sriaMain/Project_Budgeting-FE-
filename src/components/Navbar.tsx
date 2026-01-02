@@ -28,11 +28,12 @@ export const Navbar: React.FC<NavbarProps> = ({ userRole }) => {
   }
 
   const navItems = [
-    { label: 'Pipeline', icon: <LayoutGrid size={18} />, roles: ['admin', 'manager', 'user'], path: '/pipeline' },
+    { label: 'Pipeline', icon: <LayoutGrid size={18} />, roles: ['admin', 'manager'], path: '/pipeline' },
     { label: 'Projects', icon: <Briefcase size={18} />, roles: ['admin', 'manager', 'user'], path: '/projects' },
     { label: 'Reports', icon: <FileText size={18} />, roles: ['admin', 'manager'], path: '/reports' },
-    { label: 'Contacts', icon: <Users size={18} />, roles: ['admin', 'manager', 'user'], path: '/contacts' },
-    { label: 'Tasks', icon: <CheckSquare size={18} />, roles: ['admin', 'manager', 'user'], path: '/task-management' },
+    { label: 'Contacts', icon: <Users size={18} />, roles: ['admin', 'manager'], path: '/contacts' },
+    { label: 'Tasks', icon: <CheckSquare size={18} />, roles: ['admin', 'manager', 'user', 'employee'], path: '/task-management' },
+    { label: 'Profile', icon: <Users size={18} />, roles: ['employee'], path: '/profile' },
     { label: 'Administration', icon: <Settings size={18} />, roles: ['admin'], path: '/administration' },
   ];
 
@@ -57,7 +58,10 @@ export const Navbar: React.FC<NavbarProps> = ({ userRole }) => {
 
             <div className="hidden md:flex space-x-1">
               {navItems.map((item) => {
-                if (!item.roles.includes(userRole)) return null;
+                // Case-insensitive role check to handle different backend formats
+                const userRoleLower = userRole?.toLowerCase();
+                const hasAccess = item.roles.some(role => role.toLowerCase() === userRoleLower);
+                if (!hasAccess) return null;
 
                 const isActive = item.label === 'Administration'; // Simulating active state for demo logic or just styling
                 return (

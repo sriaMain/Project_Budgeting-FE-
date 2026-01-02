@@ -61,7 +61,7 @@ interface TimesheetEntry {
 
 // Props for TaskManagement component
 interface TaskManagementProps {
-  userRole: "admin" | "user";
+  userRole: "admin" | "user" | "manager";
   currentPage: string;
   onNavigate: (page: string) => void;
 }
@@ -115,7 +115,7 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
   const [tasks, setTasks] = React.useState<Task[]>([]);
   const [isLoadingTasks, setIsLoadingTasks] = React.useState(false);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
-  const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<Task | null>(null);
+  const [editingTask, setEditingTask] = useState<Task | null>(null);
 
   // Timesheet Navigation State
   const [timesheetStep, setTimesheetStep] = useState<'summary' | 'detail'>('summary');
@@ -264,7 +264,7 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
   const handleTaskAdded = () => {
     fetchTasks();
     setIsAddTaskModalOpen(false);
-    setSelectedTaskForEdit(null);
+    setEditingTask(null);
   };
 
   const handleTaskUpdated = (updatedTask: any) => {
@@ -275,17 +275,20 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
     }
     if (activeTab === 'board') fetchGroupedTasks();
     setIsAddTaskModalOpen(false);
-    setSelectedTaskForEdit(null);
+    setEditingTask(null);
   };
 
   const handleTaskClick = (task: Task) => {
-    setSelectedTaskForEdit(task);
-    setIsAddTaskModalOpen(true);
+    // Only allow admins to edit tasks
+    if (userRole === 'admin') {
+      setEditingTask(task);
+      setIsAddTaskModalOpen(true);
+    }
   };
 
   const handleCloseModal = () => {
     setIsAddTaskModalOpen(false);
-    setSelectedTaskForEdit(null);
+    setEditingTask(null);
   };
 
   const handleTimerToggle = async (taskId: number, e: React.MouseEvent) => {
@@ -356,7 +359,8 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
           {activeTab !== 'timesheet' && (
             <div className="flex items-center justify-between gap-4 px-6 py-4">
               <div className="flex items-center justify-start gap-2">
-                {activeTab === 'list' && (
+                {/* New button - only visible for admin users */}
+                {activeTab === 'list' && userRole === 'admin' && (
                   <button
                     onClick={() => setIsAddTaskModalOpen(true)}
                     className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-blue-700 transition-colors"
@@ -410,9 +414,12 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
                     <th className="px-6 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
                       Remaining
                     </th>
-                    <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
-                      Actions
-                    </th>
+                    {/* Actions column - hidden for admin users */}
+                    {userRole !== 'admin' && (
+                      <th className="px-4 py-3 text-center text-xs font-semibold text-gray-700 uppercase tracking-wider">
+                        Actions
+                      </th>
+                    )}
 
                   </tr>
                 </thead>
@@ -421,7 +428,7 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
                     <React.Fragment key={group.project}>
                       {/* Project Name Row */}
                       <tr className="bg-white border-b border-gray-200 border-t-4 border-t-blue-800">
-                        <td colSpan={6} className="px-6 py-3">
+                        <td colSpan={userRole === 'admin' ? 5 : 6} className="px-6 py-3">
                           <span className="text-base font-bold text-gray-900">{group.project}</span>
                         </td>
                       </tr>
@@ -473,10 +480,11 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
                               {(task.remaining_hours || 0).toFixed(2)}h
                             </span>
                           </td>
-                          <td className="px-4 py-4">
-                            <div className="flex items-center justify-center gap-2">
-                              {/* Control Buttons Group - Only visible for non-admin users assigned to this task */}
-                              {userRole !== 'admin' && task.assigned_to?.username === currentUsername && (
+                          {/* Actions column - hidden for admin users */}
+                          {userRole !== 'admin' && (
+                            <td className="px-4 py-4">
+                              <div className="flex items-center justify-center gap-2">
+                                {/* Control Buttons Group - Visible for all non-admin users */}
                                 <div className="flex items-center bg-gray-100 rounded-lg p-1 border border-gray-200">
                                   <button
                                     onClick={(e) => {
@@ -521,19 +529,19 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
                                     <Square size={14} fill={isTaskRunning(task.id.toString()) ? "currentColor" : "none"} />
                                   </button>
                                 </div>
-                              )}
 
-                              {/* Timer Field (Static looking but dynamic) */}
-                              <div className={`px-2 py-1.5 rounded-lg border text-xs font-mono min-w-[70px] text-center transition-all ${isTaskRunning(task.id.toString())
-                                ? 'bg-green-50 border-green-200 text-green-700 font-bold'
-                                : 'bg-gray-50 border-gray-200 text-gray-500'
-                                }`}>
-                                {isTaskRunning(task.id.toString())
-                                  ? formatTime(getElapsedTime(task.id.toString()))
-                                  : "00:00:00"}
+                                {/* Timer Field (Static looking but dynamic) */}
+                                <div className={`px-2 py-1.5 rounded-lg border text-xs font-mono min-w-[70px] text-center transition-all ${isTaskRunning(task.id.toString())
+                                  ? 'bg-green-50 border-green-200 text-green-700 font-bold'
+                                  : 'bg-gray-50 border-gray-200 text-gray-500'
+                                  }`}>
+                                  {isTaskRunning(task.id.toString())
+                                    ? formatTime(getElapsedTime(task.id.toString()))
+                                    : "00:00:00"}
+                                </div>
                               </div>
-                            </div>
-                          </td>
+                            </td>
+                          )}
                         </tr>
                       ))}
                     </React.Fragment>
@@ -909,7 +917,7 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
             isOpen={isAddTaskModalOpen}
             onClose={handleCloseModal}
             onTaskAdded={handleTaskAdded}
-            editingTask={selectedTaskForEdit}
+            editingTask={editingTask}
             onTaskUpdated={handleTaskUpdated}
           />
         )

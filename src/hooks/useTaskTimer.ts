@@ -273,21 +273,21 @@ export const useTaskTimer = (): UseTaskTimerReturn => {
             const response = await axiosInstance.get(`tasks/${taskId}/timer/state/`);
             const data = response.data;
 
-            // Update local state if timer is running on backend
-            if (data.is_running) {
+            // Update local state based on timer status
+            if (data.status === 'running' && data.is_current_task_running) {
                 setTimerState({
                     taskId: taskId,
-                    startTime: Date.now(),
-                    elapsedSeconds: data.elapsed_time || 0,
+                    startTime: Date.now() - (data.elapsed_seconds * 1000),
+                    elapsedSeconds: data.elapsed_seconds || 0,
                     isRunning: true,
                 });
                 connectWebSocket(taskId);
-            } else if (data.elapsed_time > 0) {
+            } else if (data.status === 'paused' && data.elapsed_seconds > 0) {
                 // Timer is paused but has elapsed time
                 setTimerState({
                     taskId: taskId,
                     startTime: null,
-                    elapsedSeconds: data.elapsed_time,
+                    elapsedSeconds: data.elapsed_seconds,
                     isRunning: false,
                 });
             }
