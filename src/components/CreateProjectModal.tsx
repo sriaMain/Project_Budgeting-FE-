@@ -31,13 +31,14 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 }) => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<TabType>('project');
-    const [setQuoteConfirmed, setSetQuoteConfirmed] = useState(false);
+    const [setQuoteConfirmed, setSetQuoteConfirmed] = useState(true);
     const [projectType, setProjectType] = useState<'internal' | 'external'>('external');
     const [budgetMethod, setBudgetMethod] = useState<'quoted' | 'manual'>('quoted');
     const [isSaving, setIsSaving] = useState(false);
 
     // Form state
-    const [projectName, setProjectName] = useState(quoteName);
+    // Do NOT auto-fill project name from quoteName by default
+    const [projectName, setProjectName] = useState('');
     const [membersOnly, setMembersOnly] = useState(false);
     const [client, setClient] = useState(clientName);
     const [startDate, setStartDate] = useState(new Date().toISOString().split('T')[0]);
@@ -49,14 +50,14 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
     // Update state when props change (e.g. when modal opens with new quote data)
     React.useEffect(() => {
         if (isOpen) {
-            setProjectName(quoteName);
+            // Do not auto-set projectName from quoteName to avoid accidental overwrites
             setClient(clientName);
             // Default to external if coming from a quote
             if (quoteId) {
                 setProjectType('external');
             }
         }
-    }, [isOpen, quoteName, clientName, quoteId]);
+    }, [isOpen, clientName, quoteId]);
 
 
 
@@ -70,6 +71,21 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 
         setIsSaving(true);
         try {
+            // If "Set quote as Confirmed" is enabled and we have a quoteId, update the quote status first
+            if (setQuoteConfirmed && quoteId) {
+                try {
+                    await axiosInstance.put(`/quotes/${quoteId}/`, {
+                        status: 'Confirmed'
+                    });
+                    console.log('Quote status updated to Confirmed');
+                } catch (error) {
+                    console.error('Error updating quote status:', error);
+                    toast.error('Failed to confirm quote status');
+                    setIsSaving(false);
+                    return; // Don't proceed with project creation if quote confirmation fails
+                }
+            }
+
             const payload: any = {
                 project_name: projectName,
                 project_type: projectType,

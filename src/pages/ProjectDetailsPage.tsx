@@ -1,9 +1,13 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
 import { useNavigate, useParams } from 'react-router-dom';
-import { Plus } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import { Plus, Calendar, Search, Filter } from 'lucide-react';
 import axiosInstance from '../utils/axiosInstance';
+import { ReusableTable } from '../components/ReusableTable';
+import { AddTaskModal } from '../components/AddTaskModal';
+import { AssignTaskModal } from '../components/AssignTaskModal';
+import { toast } from 'react-hot-toast';
+
 
 interface Task {
     id: string;
@@ -12,10 +16,20 @@ interface Task {
     title: string;
     status: 'Planned' | 'In Progress' | 'Completed';
     activityType: string;
-    progress: number;
+    allocatedHours: string;
+    consumedHours: string;
     dueDate: string;
-    done: string;
     remaining: string;
+}
+
+interface Payment {
+    id: number;
+    date: string;
+    type: 'Incoming' | 'Outgoing';
+    amount: number;
+    clientVendor: string;
+    reference: string;
+    paymentMethod: string;
 }
 
 interface ProjectDetailsPageProps {
@@ -28,10 +42,21 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<string>('Tasks');
-    const [activeSubTab, setActiveSubTab] = useState<string>('Budget health');
-    const [expandedSection, setExpandedSection] = useState<string | null>('Burn');
+    const [activeSubTab, setActiveSubTab] = useState<string>('Task list');
+    const [budgetSubTab, setBudgetSubTab] = useState<string>('Budget health');
+    const [budgetHealthSubTab, setBudgetHealthSubTab] = useState<string>('Budget health');
+    const [budgetViewMode, setBudgetViewMode] = useState<string>('Budget');
+    const [paymentSearch, setPaymentSearch] = useState<string>('');
+    const [paymentTypeFilter, setPaymentTypeFilter] = useState<string>('All');
+    const [showPaymentFilter, setShowPaymentFilter] = useState<boolean>(false);
     const [project, setProject] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+    const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
+    const [selectedTaskForEdit, setSelectedTaskForEdit] = useState<any | null>(null);
+    const [isAssignTaskModalOpen, setIsAssignTaskModalOpen] = useState(false);
+    const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
+    const [tasks, setTasks] = useState<Task[]>([]);
+    const [isLoadingTasks, setIsLoadingTasks] = useState(true);
 
     useEffect(() => {
         const fetchProjectDetails = async () => {
@@ -49,52 +74,142 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
         fetchProjectDetails();
     }, [projectId]);
 
+    // Fetch tasks for this project
+    useEffect(() => {
+        const fetchProjectTasks = async () => {
+            if (!projectId) return;
+            setIsLoadingTasks(true);
+            try {
+                const response = await axiosInstance.get(`tasks/${projectId}/tasks/`);
+                if (response.status === 200 && response.data) {
+                    // Map API response to Task interface
+                    const mappedTasks: Task[] = response.data.map((task: any) => ({
+                        id: task.id?.toString() || '',
+                        assignee: task.assigned_to?.username || 'Unassigned',
+                        assigneeAvatar: task.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
+                        title: task.title || 'Untitled Task',
+                        status: (task.status || 'Planned') as Task['status'],
+                        activityType: task.activity_type || 'Development',
+                        allocatedHours: task.allocated_hours ? `${task.allocated_hours}h` : '0h',
+                        consumedHours: task.consumed_hours ? `${task.consumed_hours}h` : '0h',
+                        dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD',
+                        remaining: task.remaining_hours ? `${task.remaining_hours}h` : task.allocated_hours ? `${task.allocated_hours}h` : '0h'
+                    }));
+                    setTasks(mappedTasks);
+                }
+            } catch (error) {
+                console.error('Error fetching project tasks:', error);
+                toast.error('Failed to load tasks');
+            } finally {
+                setIsLoadingTasks(false);
+            }
+        };
+
+        fetchProjectTasks();
+    }, [projectId]);
+
+    const handleTaskAdded = async (newTask: any) => {
+        console.log('Task created for project:', newTask);
+
+        // Refetch tasks after adding
+        try {
+            const response = await axiosInstance.get(`tasks/${projectId}/tasks/`);
+            if (response.status === 200 && response.data) {
+                const mappedTasks: Task[] = response.data.map((task: any) => ({
+                    id: task.id?.toString() || '',
+                    assignee: task.assigned_to?.username || 'Unassigned',
+                    assigneeAvatar: task.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
+                    title: task.title || 'Untitled Task',
+                    status: (task.status || 'Planned') as Task['status'],
+                    activityType: task.activity_type || 'Development',
+                    allocatedHours: task.allocated_hours ? `${task.allocated_hours}h` : '0h',
+                    consumedHours: task.consumed_hours ? `${task.consumed_hours}h` : '0h',
+                    dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD',
+                    remaining: task.remaining_hours ? `${task.remaining_hours}h` : task.allocated_hours ? `${task.allocated_hours}h` : '0h'
+                }));
+                setTasks(mappedTasks);
+            }
+        } catch (error) {
+            console.error('Error refetching tasks:', error);
+        }
+
+        // toast.success('Task added successfully!');
+    };
+
+    const handleUpdateTask = async (taskId: string, updates: any) => {
+        try {
+            const response = await axiosInstance.patch(`tasks/${taskId}/`, updates);
+            if (response.status === 200 || response.status === 204) {
+                toast.success('Task updated');
+                const updatedApiTask = response.data;
+                setTasks(prev => prev.map(t => t.id === taskId ? {
+                    ...t,
+                    assignee: updatedApiTask.assigned_to?.username || 'Unassigned',
+                    assigneeAvatar: updatedApiTask.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
+                    title: updatedApiTask.title || t.title,
+                    status: (updatedApiTask.status || t.status) as Task['status'],
+                    activityType: updatedApiTask.activity_type || t.activityType,
+                    allocatedHours: updatedApiTask.allocated_hours ? `${updatedApiTask.allocated_hours}h` : t.allocatedHours,
+                    consumedHours: updatedApiTask.consumed_hours ? `${updatedApiTask.consumed_hours}h` : t.consumedHours,
+                    dueDate: updatedApiTask.due_date ? new Date(updatedApiTask.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : t.dueDate,
+                    remaining: updatedApiTask.remaining_hours ? `${updatedApiTask.remaining_hours}h` : updatedApiTask.allocated_hours ? `${updatedApiTask.allocated_hours}h` : t.remaining
+                } : t));
+            }
+        } catch (error) {
+            console.error('Failed to update task:', error);
+            toast.error('Failed to update task');
+        }
+    };
+
+    const handleAssignmentSuccess = async (taskId: string, userId: number) => {
+        console.log('Task assigned:', taskId, 'to user:', userId);
+
+        // Refetch tasks to get updated assignee information
+        try {
+            const response = await axiosInstance.get(`tasks/${projectId}/tasks/`);
+            if (response.status === 200 && response.data) {
+                const mappedTasks: Task[] = response.data.map((task: any) => ({
+                    id: task.id?.toString() || '',
+                    assignee: task.assigned_to?.username || 'Unassigned',
+                    assigneeAvatar: task.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
+                    title: task.title || 'Untitled Task',
+                    status: (task.status || 'Planned') as Task['status'],
+                    activityType: task.activity_type || 'Development',
+                    allocatedHours: task.allocated_hours ? `${task.allocated_hours}h` : '0h',
+                    consumedHours: task.consumed_hours ? `${task.consumed_hours}h` : '0h',
+                    dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD',
+                    remaining: task.remaining_hours ? `${task.remaining_hours}h` : task.allocated_hours ? `${task.allocated_hours}h` : '0h'
+                }));
+                setTasks(mappedTasks);
+            }
+        } catch (error) {
+            console.error('Error refetching tasks:', error);
+        }
+    };
+
     const getStatusColor = (status: string) => {
         switch (status) {
             case 'Planned':
                 return 'bg-purple-500 text-white';
             case 'In Progress':
-                return 'bg-green-100 text-green-800';
+                return 'bg-green-500 text-white';
             case 'Completed':
-                return 'bg-blue-100 text-blue-800';
+                return 'bg-blue-500 text-white';
             default:
                 return 'bg-gray-100 text-gray-800';
         }
     };
 
-    const tasks: Task[] = [
-        {
-            id: '1',
-            assignee: 'Taylor Abbott',
-            assigneeAvatar: 'SG',
-            title: 'authentication',
-            status: 'Planned',
-            activityType: 'Development',
-            progress: 0,
-            dueDate: '2025-01-15',
-            done: '1.00',
-            remaining: '5.00'
-        }
+
+
+    const payments: Payment[] = [
+        { id: 1, date: '2025-11-12', type: 'Incoming', amount: 0.00, clientVendor: 'Client 1', reference: 'INV - 1', paymentMethod: 'Credit Card' },
+        { id: 2, date: '2025-11-1', type: 'Outgoing', amount: 0.00, clientVendor: 'Client 1', reference: 'INV - 1', paymentMethod: 'Credit Card' },
+        { id: 3, date: '2025-11-12', type: 'Incoming', amount: 0.00, clientVendor: 'Client 1', reference: 'INV - 1', paymentMethod: 'Credit Card' },
+        { id: 4, date: '2025-11-2', type: 'Outgoing', amount: 0.00, clientVendor: 'Client 1', reference: 'INV - 1', paymentMethod: 'Credit Card' },
     ];
 
-    // Budget chart data
-    const budgetData = [
-        { date: '24 Oct', budget: 2000, usedBudget: 500, forecastedBudget: 1800, budgetedCost: 1500, actualCost: 400, forecastedCost: 1200 },
-        { date: '26 Oct', budget: 2000, usedBudget: 600, forecastedBudget: 1900, budgetedCost: 1500, actualCost: 500, forecastedCost: 1250 },
-        { date: '28 Oct', budget: 2000, usedBudget: 750, forecastedBudget: 1950, budgetedCost: 1500, actualCost: 650, forecastedCost: 1300 },
-        { date: '30 Oct', budget: 2000, usedBudget: 900, forecastedBudget: 1970, budgetedCost: 1500, actualCost: 800, forecastedCost: 1350 },
-        { date: '1 Nov', budget: 2000, usedBudget: 1050, forecastedBudget: 1980, budgetedCost: 1500, actualCost: 950, forecastedCost: 1400 },
-        { date: '3 Nov', budget: 2000, usedBudget: 1200, forecastedBudget: 1985, budgetedCost: 1500, actualCost: 1100, forecastedCost: 1420 },
-        { date: '5 Nov', budget: 2000, usedBudget: 1350, forecastedBudget: 1990, budgetedCost: 1500, actualCost: 1250, forecastedCost: 1440 },
-        { date: '7 Nov', budget: 2000, usedBudget: 1500, forecastedBudget: 1995, budgetedCost: 1500, actualCost: 1400, forecastedCost: 1460 },
-        { date: '9 Nov', budget: 2000, usedBudget: 1650, forecastedBudget: 1997, budgetedCost: 1500, actualCost: 1550, forecastedCost: 1480 },
-        { date: '11 Nov', budget: 2000, usedBudget: 1800, forecastedBudget: 1998, budgetedCost: 1500, actualCost: 1700, forecastedCost: 1500 },
-        { date: '13 Nov', budget: 2000, usedBudget: 1950, forecastedBudget: 2000, budgetedCost: 1500, actualCost: 1850, forecastedCost: 1520 },
-        { date: '15 Nov', budget: 2000, usedBudget: 2100, forecastedBudget: 2050, budgetedCost: 1500, actualCost: 2000, forecastedCost: 1550 },
-        { date: '17 Nov', budget: 2000, usedBudget: 2250, forecastedBudget: 2100, budgetedCost: 1500, actualCost: 2150, forecastedCost: 1580 },
-        { date: '19 Nov', budget: 2000, usedBudget: 2400, forecastedBudget: 2150, budgetedCost: 1500, actualCost: 2300, forecastedCost: 1610 },
-        { date: '21 Nov', budget: 2000, usedBudget: 2550, forecastedBudget: 2200, budgetedCost: 1500, actualCost: 2450, forecastedCost: 1640 },
-    ];
+
 
     if (loading) {
         return (
@@ -130,54 +245,43 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             <div className="max-w-7xl mx-auto space-y-6">
                 {/* Header Section */}
                 <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                    {/* Top Row: Project # + Status Badge + Action Buttons */}
                     <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
                         <div className="flex items-center gap-3">
-                            <span className="text-sm text-gray-600 font-medium">#{project.project_no || projectId}</span>
-                            <span className={`inline-flex items-center px-4 py-2 rounded-full text-sm font-medium ${getStatusColor(project.status || 'In Progress')}`}>
+                            <span className="text-sm text-gray-500 font-medium">#{project.project_no || projectId}</span>
+                            <span className={`inline-flex items-center px-3 py-1 rounded-md text-xs font-semibold ${getStatusColor(project.status || 'In Progress')}`}>
                                 {project.status || 'In Progress'}
                             </span>
                         </div>
                         <div className="flex gap-4">
-                            <button
-                                onClick={() => navigate('/pipeline/add-quote', { state: { clientName: project.client_details?.company_name || project.client_details?.name } })}
-                                className="px-4 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 transition-colors duration-200 shadow-md"
-                            >
-                                + Add Quote
-                            </button>
-                            <button
-                                onClick={() => navigate(`/projects/edit/${projectId}`)}
-                                className="px-4 py-2 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200"
-                            >
+                            <button className="px-4 py-2 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200">
                                 ✎ Modify Details
                             </button>
-                            <button className="px-4 py-2 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200">
+                            <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors duration-200">
                                 Monthly Budget
                             </button>
                         </div>
                     </div>
 
                     {/* Project Title */}
-                    <h1 className="text-2xl font-bold text-gray-900 mb-4">{project.project_name}</h1>
+                    <h1 className="text-xl font-bold text-gray-900 mb-4">{project.project_name}</h1>
 
-                    {/* Team Member, Date & Progress Bar */}
-                    <div className="space-y-2">
-                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4 mb-4">
-                            <div className="flex items-center gap-3">
-                                <div className="w-10 h-10 bg-blue-600 rounded-full flex items-center justify-center text-white font-medium text-sm">
-                                    {project.client_details?.name?.substring(0, 2).toUpperCase() || 'CL'}
-                                </div>
-                                <span className="text-sm text-gray-900">&gt;</span>
-                                <div className="w-8 h-8 rounded-full border-2 border-dotted border-gray-400 flex items-center justify-center text-xs text-gray-500">
-                                    +
-                                </div>
-                                <p className="text-xs text-gray-600">{project.start_date}</p>
+                    {/* Bottom Row: Avatar + Name + Arrow + Add Icon + Date + Progress Bar */}
+                    <div className="flex items-center gap-4">
+
+
+                        {/* Date with Calendar Icon */}
+                        <div className="flex items-center gap-6 text-sm text-gray-600">
+                            <Calendar className="w-4 h-4 text-gray-400" />
+                            <span>{project.end_date || project.start_date}</span>
+                        </div>
+
+                        {/* Progress Bar */}
+                        <div className="flex items-center gap-6 flex-1 max-w-xs">
+                            <div className="flex-1 bg-gray-200 rounded-full h-2">
+                                <div className="bg-blue-600 h-2 rounded-full transition-all duration-100" style={{ width: `${project.progress || 0}%` }}></div>
                             </div>
-                            <div className="flex items-center gap-2 flex-1">
-                                <div className="flex-1 bg-gray-200 rounded-full h-2">
-                                    <div className="bg-blue-600 h-2 rounded-full" style={{ width: `${project.progress || 0}%` }}></div>
-                                </div>
-                                <span className="text-xs text-gray-600 whitespace-nowrap">Estimated: {project.estimated_hours || 0}h</span>
-                            </div>
+                            <span className="text-xs text-gray-500 whitespace-nowrap">Estimated: {project.estimated_hours || 20}h</span>
                         </div>
                     </div>
                 </div>
@@ -215,14 +319,15 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                     {/* Main Tabs */}
                     <div className="border-b border-gray-200 px-6">
                         <div className="flex gap-8 overflow-x-auto">
-                            {['Tasks', 'Time', 'Budget', 'Finances', 'Details'].map((tab) => (
+                            {['Tasks', 'Time', 'Budget', 'Finances', 'Details', 'Payment'].map((tab) => (
                                 <button
                                     type="button"
                                     key={tab}
                                     onClick={() => {
                                         setActiveTab(tab);
-                                        setActiveSubTab(tab === 'Tasks' ? 'Task list' : tab === 'Budget' ? 'Budget health' : '');
-                                        setExpandedSection(null);
+                                        if (tab === 'Tasks') {
+                                            setActiveSubTab('Task list');
+                                        }
                                     }}
                                     className={`py-4 px-2 text-sm font-medium border-b-2 transition-colors whitespace-nowrap ${activeTab === tab
                                         ? 'text-gray-900 border-blue-600'
@@ -267,52 +372,88 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                                 <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Task title</th>
                                                 <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Status</th>
                                                 <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Activity type</th>
-                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Progress</th>
+                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Allocated hours</th>
+                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Consumed hours</th>
                                                 <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Due date</th>
-                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Done</th>
                                                 <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Remaining</th>
                                             </tr>
                                         </thead>
                                         <tbody>
-                                            {tasks.map((task) => (
-                                                <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
-                                                    <td className="py-4 px-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-8 h-8 bg-blue-600 rounded-full flex items-center justify-center text-white text-xs font-medium">
-                                                                {task.assigneeAvatar}
-                                                            </div>
-                                                            <span className="text-sm text-gray-900">&gt;</span>
-                                                            <div className="w-6 h-6 rounded-full border-2 border-dotted border-gray-400"></div>
+                                            {isLoadingTasks ? (
+                                                <tr>
+                                                    <td colSpan={8} className="py-12 text-center">
+                                                        <div className="flex flex-col items-center justify-center">
+                                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                                                            <p className="text-sm text-gray-500">Loading tasks...</p>
                                                         </div>
                                                     </td>
-                                                    <td className="py-4 px-3 text-sm text-gray-900">{task.title}</td>
-                                                    <td className="py-4 px-3">
-                                                        <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                                                            {task.status}
-                                                        </span>
-                                                    </td>
-                                                    <td className="py-4 px-3 text-sm text-gray-600">{task.activityType}</td>
-                                                    <td className="py-4 px-3">
-                                                        <div className="flex items-center gap-2">
-                                                            <div className="w-12 bg-gray-200 rounded-full h-1.5">
-                                                                <div
-                                                                    className="bg-blue-600 h-1.5 rounded-full"
-                                                                    style={{ width: `${task.progress}%` }}
-                                                                ></div>
-                                                            </div>
-                                                            <span className="text-xs text-gray-600">{task.progress}%</span>
-                                                        </div>
-                                                    </td>
-                                                    <td className="py-4 px-3 text-sm text-gray-600">{task.dueDate}</td>
-                                                    <td className="py-4 px-3 text-sm text-gray-900">{task.done}</td>
-                                                    <td className="py-4 px-3 text-sm text-gray-600">{task.remaining}</td>
                                                 </tr>
-                                            ))}
+                                            ) : tasks.length === 0 ? (
+                                                <tr>
+                                                    <td colSpan={8} className="py-12 text-center">
+                                                        <p className="text-sm text-gray-500">No tasks found for this project. Click "Add task" to create one.</p>
+                                                    </td>
+                                                </tr>
+                                            ) : (
+                                                tasks.map((task) => (
+                                                    <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                                        <td className="py-4 px-3">
+                                                            <div className="flex items-center gap-2">
+                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${task.assignee !== 'Unassigned'
+                                                                    ? 'bg-blue-600 text-white'
+                                                                    : 'bg-gray-200 text-gray-400 border-2 border-dashed border-gray-300'
+                                                                    }`}
+                                                                    title={task.assignee}
+                                                                >
+                                                                    {task.assigneeAvatar}
+                                                                </div>
+                                                                <span className="text-sm text-gray-900">&gt;</span>
+                                                                <button
+                                                                    onClick={() => {
+                                                                        setSelectedTaskForAssignment(task);
+                                                                        setIsAssignTaskModalOpen(true);
+                                                                    }}
+                                                                    className="w-6 h-6 rounded-full border-2 border-dotted border-gray-400 hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer flex items-center justify-center"
+                                                                    title={task.assignee !== 'Unassigned' ? 'Reassign task' : 'Assign task'}
+                                                                >
+                                                                    <Plus className="w-3 h-3 text-gray-400 hover:text-blue-500" />
+                                                                </button>
+                                                            </div>
+                                                        </td>
+                                                        <td
+                                                            onClick={async () => {
+                                                                try {
+                                                                    const resp = await axiosInstance.get(`tasks/${task.id}/`);
+                                                                    setSelectedTaskForEdit(resp.data);
+                                                                    setIsAddTaskModalOpen(true);
+                                                                } catch (err) {
+                                                                    console.error('Failed to fetch task details', err);
+                                                                    toast.error('Failed to load task for editing');
+                                                                }
+                                                            }}
+                                                            className="py-4 px-3 text-sm text-gray-900 cursor-pointer"
+                                                        >{task.title}</td>
+                                                        <td className="py-4 px-3">
+                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
+                                                                {task.status}
+                                                            </span>
+                                                        </td>
+                                                        <td className="py-4 px-3 text-sm text-gray-600">{task.activityType}</td>
+                                                        <td className="py-4 px-3 text-sm text-gray-900">{task.allocatedHours}</td>
+                                                        <td className="py-4 px-3 text-sm text-gray-900">{task.consumedHours}</td>
+                                                        <td className="py-4 px-3 text-sm text-gray-600">{task.dueDate}</td>
+                                                        <td className="py-4 px-3 text-sm text-gray-600">{task.remaining}</td>
+                                                    </tr>
+                                                ))
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>
                                 <div className="mt-6">
-                                    <button className="inline-flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 font-medium">
+                                    <button
+                                        onClick={() => setIsAddTaskModalOpen(true)}
+                                        className="inline-flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 font-medium"
+                                    >
                                         <Plus className="w-4 h-4" />
                                         Add task
                                     </button>
@@ -331,143 +472,127 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
 
                         {activeTab === 'Budget' && (
                             <div className="space-y-6">
-                                {/* Budget Sub Tabs */}
-                                <div className="border-b border-gray-200 flex gap-6">
-                                    {['Budget health', 'Learn more'].map((subTab) => (
-                                        <button
-                                            key={subTab}
-                                            className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${activeSubTab === subTab
-                                                ? 'text-gray-900 border-pink-500'
-                                                : 'text-gray-600 border-transparent hover:text-gray-900'
-                                                }`}
-                                            onClick={() => setActiveSubTab(subTab)}
-                                        >
-                                            {subTab}
-                                        </button>
-                                    ))}
+                                {/* Budget Sub Tabs: Budget health, Revenue, Profit */}
+                                <div className="border-b border-gray-200">
+                                    <div className="flex gap-6">
+                                        {['Budget health', 'Revenue', 'Profit'].map((subTab) => (
+                                            <button
+                                                key={subTab}
+                                                type="button"
+                                                className={`py-3 px-1 text-sm font-medium border-b-2 transition-colors ${budgetSubTab === subTab
+                                                    ? 'text-gray-900 border-blue-600'
+                                                    : 'text-gray-600 border-transparent hover:text-gray-900'
+                                                    }`}
+                                                onClick={() => setBudgetSubTab(subTab)}
+                                            >
+                                                {subTab}
+                                            </button>
+                                        ))}
+                                    </div>
                                 </div>
 
                                 {/* Budget Health Content */}
-                                {activeSubTab === 'Budget health' && (
-                                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                                        {/* Left Section - Collapsible Items */}
-                                        <div className="lg:col-span-2 space-y-4">
-                                            {/* Burn Section */}
-                                            <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                                <button
-                                                    onClick={() => setExpandedSection(expandedSection === 'Burn' ? null : 'Burn')}
-                                                    className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center gap-2 font-medium text-gray-700 transition-colors"
-                                                >
-                                                    <span>{expandedSection === 'Burn' ? '▼' : '▶'}</span>
-                                                    Burn
-                                                </button>
-                                                {expandedSection === 'Burn' && (
-                                                    <div className="p-4 bg-white">
-                                                        <div className="h-64">
-                                                            <ResponsiveContainer width="100%" height="100%">
-                                                                <LineChart data={budgetData}>
-                                                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                                                    <XAxis dataKey="date" stroke="#9ca3af" style={{ fontSize: '11px' }} />
-                                                                    <YAxis stroke="#9ca3af" style={{ fontSize: '11px' }} />
-                                                                    <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
-                                                                    <Line type="monotone" dataKey="budget" stroke="#2563eb" dot={false} strokeWidth={2} />
-                                                                    <Line type="monotone" dataKey="usedBudget" stroke="#dc2626" dot={false} strokeWidth={2} />
-                                                                </LineChart>
-                                                            </ResponsiveContainer>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                {budgetSubTab === 'Budget health' && (
+                                    <div className="space-y-4">
+                                        {/* Header with Budget health/Learn more on left and Budget/Time toggle on right */}
+                                        <div className="flex items-center justify-between mb-4">
+                                            {/* Budget health / Learn more tabs on left */}
+                                            <div className="flex gap-6">
+                                                {['Budget health', 'Learn more'].map((healthTab) => (
+                                                    <button
+                                                        key={healthTab}
+                                                        type="button"
+                                                        className={`py-2 px-3 text-sm font-medium rounded-lg transition-colors ${budgetHealthSubTab === healthTab
+                                                            ? 'bg-gray-100 text-gray-900'
+                                                            : 'text-gray-600 hover:bg-gray-50 hover:text-gray-900'
+                                                            }`}
+                                                        onClick={() => setBudgetHealthSubTab(healthTab)}
+                                                    >
+                                                        {healthTab}
+                                                    </button>
+                                                ))}
                                             </div>
 
-                                            {/* Run Section */}
-                                            <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                                <button
-                                                    onClick={() => setExpandedSection(expandedSection === 'Run' ? null : 'Run')}
-                                                    className="w-full px-4 py-3 bg-gray-50 hover:bg-gray-100 flex items-center gap-2 font-medium text-gray-700 transition-colors"
-                                                >
-                                                    <span>{expandedSection === 'Run' ? '▼' : '▶'}</span>
-                                                    Run
-                                                </button>
-                                                {expandedSection === 'Run' && (
-                                                    <div className="p-4 bg-white">
-                                                        <div className="h-64">
-                                                            <ResponsiveContainer width="100%" height="100%">
-                                                                <LineChart data={budgetData}>
-                                                                    <CartesianGrid strokeDasharray="3 3" stroke="#e5e7eb" />
-                                                                    <XAxis dataKey="date" stroke="#9ca3af" style={{ fontSize: '11px' }} />
-                                                                    <YAxis stroke="#9ca3af" style={{ fontSize: '11px' }} />
-                                                                    <Tooltip contentStyle={{ backgroundColor: '#fff', border: '1px solid #e5e7eb', borderRadius: '8px' }} />
-                                                                    <Line type="monotone" dataKey="budgetedCost" stroke="#0891b2" dot={false} strokeWidth={2} />
-                                                                    <Line type="monotone" dataKey="actualCost" stroke="#0891b2" dot={false} strokeWidth={2} strokeDasharray="5 5" />
-                                                                </LineChart>
-                                                            </ResponsiveContainer>
-                                                        </div>
-                                                    </div>
-                                                )}
+                                            {/* Budget/Time Toggle on right */}
+                                            <div className="flex gap-2 bg-gray-100 rounded-lg p-1">
+                                                {['Budget', 'Time'].map((mode) => (
+                                                    <button
+                                                        key={mode}
+                                                        type="button"
+                                                        onClick={() => setBudgetViewMode(mode)}
+                                                        className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${budgetViewMode === mode
+                                                            ? 'bg-white text-gray-900 shadow-sm'
+                                                            : 'text-gray-600 hover:text-gray-900'
+                                                            }`}
+                                                    >
+                                                        {mode}
+                                                    </button>
+                                                ))}
                                             </div>
                                         </div>
 
-                                        {/* Right Section - Metrics Legend */}
-                                        <div className="lg:col-span-1">
-                                            <div className="bg-gray-50 rounded-lg p-4 space-y-4 sticky top-6">
-                                                <h3 className="font-semibold text-gray-900 mb-4">Metrics</h3>
-
-                                                <div className="flex items-start gap-3">
-                                                    <div className="w-3 h-3 bg-blue-600 rounded-full mt-1 flex-shrink-0"></div>
-                                                    <div>
-                                                        <div className="text-xs text-gray-500">Budget</div>
-                                                        <div className="text-lg font-semibold text-gray-900">4,866</div>
+                                        {/* Budget Health Sub-Content */}
+                                        {budgetHealthSubTab === 'Budget health' && (
+                                            <div className="bg-gray-50 rounded-lg border border-gray-200 p-8 text-center">
+                                                <div className="max-w-md mx-auto">
+                                                    <div className="mb-4">
+                                                        <svg className="mx-auto h-12 w-12 text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                                                        </svg>
                                                     </div>
-                                                </div>
-
-                                                <div className="flex items-start gap-3">
-                                                    <div className="w-3 h-3 bg-red-600 rounded-full mt-1 flex-shrink-0"></div>
-                                                    <div>
-                                                        <div className="text-xs text-gray-500">Used budget</div>
-                                                        <div className="text-lg font-semibold text-gray-900">1,087</div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-start gap-3">
-                                                    <div className="w-3 h-0.5 bg-red-600 mt-2 flex-shrink-0"></div>
-                                                    <div>
-                                                        <div className="text-xs text-gray-500">Forecasted budget</div>
-                                                        <div className="text-lg font-semibold text-gray-900">3,779</div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-start gap-3">
-                                                    <div className="w-3 h-3 bg-cyan-600 rounded-full mt-1 flex-shrink-0"></div>
-                                                    <div>
-                                                        <div className="text-xs text-gray-500">Budgeted cost</div>
-                                                        <div className="text-lg font-semibold text-gray-900">534</div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-start gap-3">
-                                                    <div className="w-3 h-0.5 bg-cyan-600 mt-2 flex-shrink-0"></div>
-                                                    <div>
-                                                        <div className="text-xs text-gray-500">Actual cost</div>
-                                                        <div className="text-lg font-semibold text-gray-900">1,100</div>
-                                                    </div>
-                                                </div>
-
-                                                <div className="flex items-start gap-3">
-                                                    <div className="w-3 h-0.5 bg-cyan-600 mt-2 flex-shrink-0" style={{ backgroundImage: 'repeating-linear-gradient(90deg,currentColor 0,currentColor 2px,transparent 2px,transparent 4px)' }}></div>
-                                                    <div>
-                                                        <div className="text-xs text-gray-500">Forecasted profit</div>
-                                                        <div className="text-lg font-semibold text-gray-900">2,250</div>
-                                                    </div>
+                                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Budget Health Overview</h3>
+                                                    <p className="text-sm text-gray-600 mb-4">View: {budgetViewMode}</p>
+                                                    <p className="text-sm text-gray-500">Budget health monitoring features are coming soon. Track your project's financial performance in real-time.</p>
                                                 </div>
                                             </div>
+                                        )}
+
+                                        {/* Learn More Sub-Content */}
+                                        {budgetHealthSubTab === 'Learn more' && (
+                                            <div className="bg-blue-50 rounded-lg border border-blue-200 p-8 text-center">
+                                                <div className="max-w-md mx-auto">
+                                                    <div className="mb-4">
+                                                        <svg className="mx-auto h-12 w-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                        </svg>
+                                                    </div>
+                                                    <h3 className="text-lg font-semibold text-gray-900 mb-2">Learn More</h3>
+                                                    <p className="text-sm text-gray-600">Detailed information and guides about budget management will be available here.</p>
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+                                )}
+
+                                {/* Revenue Content */}
+                                {budgetSubTab === 'Revenue' && (
+                                    <div className="bg-green-50 rounded-lg border border-green-200 p-12 text-center">
+                                        <div className="max-w-md mx-auto">
+                                            <div className="mb-4">
+                                                <svg className="mx-auto h-16 w-16 text-green-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                                </svg>
+                                            </div>
+                                            <h3 className="text-xl font-bold text-gray-900 mb-2">Revenue Tracking</h3>
+                                            <p className="text-gray-600 mb-4">Monitor your project revenue and income streams</p>
+                                            <p className="text-sm text-gray-500">Revenue tracking features are coming soon.</p>
                                         </div>
                                     </div>
                                 )}
 
-                                {/* Learn More Content */}
-                                {activeSubTab === 'Learn more' && (
-                                    <div className="text-center py-12">
-                                        <p className="text-gray-600">Learn more content coming soon</p>
+                                {/* Profit Content */}
+                                {budgetSubTab === 'Profit' && (
+                                    <div className="bg-purple-50 rounded-lg border border-purple-200 p-12 text-center">
+                                        <div className="max-w-md mx-auto">
+                                            <div className="mb-4">
+                                                <svg className="mx-auto h-16 w-16 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" />
+                                                </svg>
+                                            </div>
+                                            <h3 className="text-xl font-bold text-gray-900 mb-2">Profit Analysis</h3>
+                                            <p className="text-gray-600 mb-4">Analyze profit margins and project profitability</p>
+                                            <p className="text-sm text-gray-500">Profit analysis features are coming soon.</p>
+                                        </div>
                                     </div>
                                 )}
                             </div>
@@ -479,7 +604,12 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
                                         <h3 className="font-semibold text-blue-600 text-sm">Quotes</h3>
-                                        <button className="text-blue-600 text-sm font-medium hover:text-blue-700">New Quote</button>
+                                        <button
+                                            onClick={() => navigate('/pipeline/add-quote')}
+                                            className="text-black-800 text-sm font-medium hover:text-blue-600"
+                                        >
+                                            New Quote
+                                        </button>
                                     </div>
                                     <div className="px-6 py-4 bg-white">
                                         <p className="text-gray-500 text-sm">No quotes to display</p>
@@ -490,7 +620,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
                                         <h3 className="font-semibold text-blue-600 text-sm">Invoices</h3>
-                                        <button className="text-blue-600 text-sm font-medium hover:text-blue-700">New Invoices</button>
+                                        <button className="text-black-800 text-sm font-medium hover:text-blue-700">New Invoices</button>
                                     </div>
                                     <div className="px-6 py-4 bg-white">
                                         <p className="text-gray-500 text-sm">No invoices to display</p>
@@ -501,7 +631,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
                                         <h3 className="font-semibold text-blue-600 text-sm">Purchase orders</h3>
-                                        <button className="text-blue-600 text-sm font-medium hover:text-blue-700">New Purchase orders</button>
+                                        <button className="text-black-800 text-sm font-medium hover:text-blue-700">New Purchase orders</button>
                                     </div>
                                     <div className="px-6 py-4 bg-white">
                                         <p className="text-gray-500 text-sm">No purchase orders to display</p>
@@ -512,7 +642,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
                                         <h3 className="font-semibold text-blue-600 text-sm">Bills</h3>
-                                        <button className="text-blue-600 text-sm font-medium hover:text-blue-700">New Bills</button>
+                                        <button className="text-black-800 text-sm font-medium hover:text-blue-700">New Bills</button>
                                     </div>
                                     <div className="px-6 py-4 bg-white">
                                         <p className="text-gray-500 text-sm">No bills to display</p>
@@ -523,7 +653,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
                                         <h3 className="font-semibold text-blue-600 text-sm">Expenses</h3>
-                                        <button className="text-blue-600 text-sm font-medium hover:text-blue-700">New Expenses</button>
+                                        <button className="text-black-800 text-sm font-medium hover:text-blue-700">New Expenses</button>
                                     </div>
                                     <div className="px-6 py-4 bg-white">
                                         <p className="text-gray-500 text-sm">No expenses to display</p>
@@ -586,9 +716,184 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 </div>
                             </div>
                         )}
+
+                        {activeTab === 'Payment' && (
+                            <div className="space-y-4">
+                                {/* Filter and Search Bar */}
+                                <div className="flex items-center justify-end gap-3">
+                                    <div className="relative">
+                                        <button
+                                            onClick={() => setShowPaymentFilter(!showPaymentFilter)}
+                                            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
+                                        >
+                                            <Filter className="w-4 h-4" />
+                                            Filter
+                                        </button>
+
+                                        {/* Filter Dropdown */}
+                                        {showPaymentFilter && (
+                                            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                                                <div className="p-3">
+                                                    <p className="text-xs font-medium text-gray-700 mb-2">Filter by Type</p>
+                                                    {['All', 'Incoming', 'Outgoing'].map((type) => (
+                                                        <button
+                                                            key={type}
+                                                            onClick={() => {
+                                                                setPaymentTypeFilter(type);
+                                                                setShowPaymentFilter(false);
+                                                            }}
+                                                            className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors ${paymentTypeFilter === type ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
+                                                                }`}
+                                                        >
+                                                            {type}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            </div>
+                                        )}
+                                    </div>
+
+                                    <div className="relative w-64">
+                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                        <input
+                                            type="text"
+                                            placeholder="Search..."
+                                            value={paymentSearch}
+                                            onChange={(e) => setPaymentSearch(e.target.value)}
+                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Payments Table using ReusableTable */}
+                                <ReusableTable<Payment>
+                                    data={payments.filter(payment => {
+                                        // Type filter
+                                        const typeMatch = paymentTypeFilter === 'All' || payment.type === paymentTypeFilter;
+                                        // Search filter
+                                        const searchLower = paymentSearch.toLowerCase();
+                                        const searchMatch = paymentSearch === '' ||
+                                            payment.clientVendor.toLowerCase().includes(searchLower) ||
+                                            payment.reference.toLowerCase().includes(searchLower) ||
+                                            payment.paymentMethod.toLowerCase().includes(searchLower) ||
+                                            payment.date.toLowerCase().includes(searchLower);
+                                        return typeMatch && searchMatch;
+                                    })}
+                                    columns={[
+                                        {
+                                            header: 'DATE',
+                                            accessor: 'date',
+                                            className: 'uppercase text-xs'
+                                        },
+                                        {
+                                            header: 'TYPE',
+                                            accessor: (payment) => (
+                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${payment.type === 'Incoming'
+                                                    ? 'bg-green-500 text-white'
+                                                    : 'bg-red-500 text-white'
+                                                    }`}>
+                                                    {payment.type}
+                                                </span>
+                                            ),
+                                            className: 'uppercase text-xs'
+                                        },
+                                        {
+                                            header: 'AMOUNT',
+                                            accessor: (payment) => `$ ${payment.amount.toFixed(2)}`,
+                                            className: 'uppercase text-xs'
+                                        },
+                                        {
+                                            header: 'CLIENT/VENDOR',
+                                            accessor: 'clientVendor',
+                                            className: 'uppercase text-xs'
+                                        },
+                                        {
+                                            header: 'REFERENCE',
+                                            accessor: (payment) => (
+                                                <a href="#" className="text-sm text-blue-600 hover:text-blue-800 hover:underline">
+                                                    {payment.reference}
+                                                </a>
+                                            ),
+                                            className: 'uppercase text-xs'
+                                        },
+                                        {
+                                            header: 'PAYMENT METHOD',
+                                            accessor: 'paymentMethod',
+                                            className: 'uppercase text-xs'
+                                        }
+                                    ]}
+                                    keyField="id"
+                                    emptyMessage="No payments found"
+                                />
+                            </div>
+                        )}
                     </div>
                 </div>
             </div>
+
+            {/* Add Task Modal */}
+            {isAddTaskModalOpen && project && (
+                <AddTaskModal
+                    isOpen={isAddTaskModalOpen}
+                    onClose={() => { setIsAddTaskModalOpen(false); setSelectedTaskForEdit(null); }}
+                    onTaskAdded={handleTaskAdded}
+                    prefilledProjectId={project.id || parseInt(projectId || '0')}
+                    prefilledProjectName={project.project_name || `Project #${projectId}`}
+                    editingTask={selectedTaskForEdit}
+                    onTaskUpdated={async (updatedApiTask: any) => {
+                        if (updatedApiTask && updatedApiTask.id) {
+                            const taskId = updatedApiTask.id.toString();
+                            setTasks(prev => prev.map(t => t.id === taskId ? {
+                                ...t,
+                                assignee: updatedApiTask.assigned_to?.username || 'Unassigned',
+                                assigneeAvatar: updatedApiTask.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
+                                title: updatedApiTask.title || t.title,
+                                status: (updatedApiTask.status || t.status) as Task['status'],
+                                activityType: updatedApiTask.activity_type || t.activityType,
+                                allocatedHours: updatedApiTask.allocated_hours ? `${updatedApiTask.allocated_hours}h` : t.allocatedHours,
+                                consumedHours: updatedApiTask.consumed_hours ? `${updatedApiTask.consumed_hours}h` : t.consumedHours,
+                                dueDate: updatedApiTask.due_date ? new Date(updatedApiTask.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : t.dueDate,
+                                remaining: updatedApiTask.remaining_hours ? `${updatedApiTask.remaining_hours}h` : updatedApiTask.allocated_hours ? `${updatedApiTask.allocated_hours}h` : t.remaining
+                            } : t));
+                        } else {
+                            // fallback to refetch if no data returned
+                            try {
+                                const response = await axiosInstance.get(`tasks/${projectId}/tasks/`);
+                                if (response.status === 200 && response.data) {
+                                    const mappedTasks: Task[] = response.data.map((task: any) => ({
+                                        id: task.id?.toString() || '',
+                                        assignee: task.assigned_to?.username || 'Unassigned',
+                                        assigneeAvatar: task.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
+                                        title: task.title || 'Untitled Task',
+                                        status: (task.status || 'Planned') as Task['status'],
+                                        activityType: task.activity_type || 'Development',
+                                        allocatedHours: task.allocated_hours ? `${task.allocated_hours}h` : '0h',
+                                        consumedHours: task.consumed_hours ? `${task.consumed_hours}h` : '0h',
+                                        dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD',
+                                        remaining: task.remaining_hours ? `${task.remaining_hours}h` : task.allocated_hours ? `${task.allocated_hours}h` : '0h'
+                                    }));
+                                    setTasks(mappedTasks);
+                                }
+                            } catch (error) {
+                                console.error('Error refetching tasks after update:', error);
+                            }
+                        }
+                    }}
+                />
+            )}
+
+            {/* Assign Task Modal */}
+            {isAssignTaskModalOpen && selectedTaskForAssignment && (
+                <AssignTaskModal
+                    isOpen={isAssignTaskModalOpen}
+                    onClose={() => {
+                        setIsAssignTaskModalOpen(false);
+                        setSelectedTaskForAssignment(null);
+                    }}
+                    onAssignmentSuccess={handleAssignmentSuccess}
+                    task={selectedTaskForAssignment}
+                />
+            )}
         </Layout>
     );
 };

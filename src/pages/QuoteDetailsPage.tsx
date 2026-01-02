@@ -5,11 +5,13 @@
 
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Edit, FileText, Share2, Send, Receipt, Loader2 } from 'lucide-react';
+import { Edit, FileText, Share2, Send, Receipt, Loader2, Plus } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { InfoDisplay } from '../components/InfoDisplay';
 import { ReusableTable, type Column } from '../components/ReusableTable';
 import { CreateProjectModal } from '../components/CreateProjectModal';
+import { AddPOCModal } from '../components/AddPOCModal';
+import type { POC } from './ClientListPage';
 import axiosInstance from '../utils/axiosInstance';
 import { toast } from 'react-hot-toast';
 
@@ -39,12 +41,22 @@ interface QuoteData {
     due_date: string;
     status: string;
     author: string;
+    has_project?: boolean;
     client: {
+        id?: number;
         company_name: string;
         street_address: string;
         city: string;
         state: string;
         country: string;
+    };
+    client_id?: number;
+    poc_details?: {
+        id: number;
+        poc_name: string;
+        designation: string;
+        poc_email: string;
+        poc_mobile: string;
     };
     sub_total: string;
     tax_percentage: string;
@@ -60,6 +72,7 @@ export default function QuoteDetailsPage({
     const { quoteNo } = useParams<{ quoteNo: string }>();
     const navigate = useNavigate();
     const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
+    const [isAddPOCModalOpen, setIsAddPOCModalOpen] = useState(false);
     const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
     const [isLoading, setIsLoading] = useState(true);
     const [isActionLoading, setIsActionLoading] = useState(false);
@@ -171,6 +184,12 @@ export default function QuoteDetailsPage({
         navigate(`/pipeline/edit-quote/${quoteNo}`);
     };
 
+    const handlePOCAdded = (newPOC: POC) => {
+        // Refresh quote details to show the new POC
+        fetchQuoteDetails();
+        toast.success('POC added successfully!');
+    };
+
     if (isLoading) {
         return (
             <Layout userRole={userRole} currentPage={currentPage} onNavigate={onNavigate}>
@@ -239,13 +258,24 @@ export default function QuoteDetailsPage({
                                 }
                             />
                         </div>
-
-                        <button
-                            onClick={() => setIsCreateProjectModalOpen(true)}
-                            className="px-4 py-2 w-50 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200"
-                        >
-                            Create Project
-                        </button>
+                        {/* Only show Create Project button when status is Confirmed */}
+                        {quoteData.status.toLowerCase() === 'confirmed' && (
+                            <button
+                                onClick={() => {
+                                    if (!quoteData.has_project) {
+                                        setIsCreateProjectModalOpen(true);
+                                    }
+                                }}
+                                disabled={quoteData.has_project}
+                                className={`px-4 py-2 w-50 font-medium rounded-lg transition-colors duration-200 ${
+                                    quoteData.has_project
+                                        ? 'bg-gray-300 text-gray-600 cursor-not-allowed opacity-60'
+                                        : 'bg-purple-200 text-black hover:bg-purple-300'
+                                }`}
+                            >
+                                {quoteData.has_project ? 'Project Already Created' : 'Create Project'}
+                            </button>
+                        )}
                     </div>
                 </div>
 
@@ -318,12 +348,26 @@ export default function QuoteDetailsPage({
             {/* Create Project Modal */}
             <CreateProjectModal
                 isOpen={isCreateProjectModalOpen}
-                onClose={() => setIsCreateProjectModalOpen(false)}
+                onClose={() => {
+                    setIsCreateProjectModalOpen(false);
+                    // Refresh quote data to reflect any status changes
+                    fetchQuoteDetails();
+                }}
                 quoteId={quoteData.quote_no}
                 quoteName={quoteData.quote_name}
                 clientName={quoteData.client.company_name}
                 authorName={quoteData.author}
             />
+
+            {/* Add POC Modal */}
+            {isAddPOCModalOpen && quoteData && (quoteData.client_id || quoteData.client.id) && (
+                <AddPOCModal
+                    companyId={quoteData.client_id || quoteData.client.id!}
+                    companyName={quoteData.client.company_name}
+                    onSave={handlePOCAdded}
+                    onClose={() => setIsAddPOCModalOpen(false)}
+                />
+            )}
         </Layout>
     );
 }

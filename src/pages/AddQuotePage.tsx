@@ -9,6 +9,7 @@ import { useNavigate, useParams, useLocation } from 'react-router-dom';
 import { useSelector } from 'react-redux';
 import { Layout } from '../components/Layout';
 import { AddClientModal } from '../components/AddClientModal';
+import { AddPOCModal } from '../components/AddPOCModal';
 import ModulesTab from '../components/ModulesTab';
 import type { Quote, QuoteFormData, PipelineStage } from '../types/pipeline.types';
 import axiosInstance from '../utils/axiosInstance';
@@ -106,6 +107,7 @@ export default function AddQuotePage() {
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<{ general?: string }>({});
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
+  const [isAddPOCModalOpen, setIsAddPOCModalOpen] = useState(false);
   const [isAddServiceModalOpen, setIsAddServiceModalOpen] = useState(false);
 
   const [quoteDetails, setQuoteDetails] = useState({
@@ -382,7 +384,7 @@ export default function AddQuotePage() {
 
     try {
       const selectedClient = clients.find(c => c.company_name === quoteDetails.client);
-      
+
       let pocId: number | null = null;
       if (selectedClient && quoteDetails.poc) {
         const selectedPoc = selectedClient.pocs.find(p => p.poc_name === quoteDetails.poc);
@@ -467,6 +469,14 @@ export default function AddQuotePage() {
     fetchProductGroupsWithModules();
   };
 
+  const handlePOCAdded = (newPOC: POC) => {
+    // Refresh clients to get the new POC in the list
+    fetchClients().then(() => {
+      // Auto-select the new POC
+      setQuoteDetails(prev => ({ ...prev, poc: newPOC.poc_name }));
+    });
+  };
+
   return (
     <Layout userRole="admin" currentPage="pipeline" onNavigate={() => { }}>
       <div className="px-2 sm:px-4 md:px-6 lg:px-8">
@@ -541,26 +551,37 @@ export default function AddQuotePage() {
                   </div>
 
                   <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] items-start sm:items-center gap-2 sm:gap-6">
-                    <label className="text-sm sm:text-base font-medium text-gray-700">POC (Optional)</label>
-                    <div className="relative">
-                      <select
-                        value={quoteDetails.poc}
-                        onChange={(e) => handleDetailChange('poc', e.target.value)}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base appearance-none bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                        disabled={!quoteDetails.client || isLoadingData}
+                    <label className="text-sm sm:text-base font-medium text-gray-700">POC</label>
+                    <div className="flex gap-2 items-center">
+                      <div className="relative flex-1">
+                        <select
+                          value={quoteDetails.poc}
+                          onChange={(e) => handleDetailChange('poc', e.target.value)}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base appearance-none bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          disabled={!quoteDetails.client || isLoadingData}
+                        >
+                          <option value="">
+                            {!quoteDetails.client ? 'Select client first' : 'Select POC'}
+                          </option>
+                          {quoteDetails.client && clients
+                            .find(c => c.company_name === quoteDetails.client)
+                            ?.pocs.map(poc => (
+                              <option key={poc.id} value={poc.poc_name}>
+                                {poc.poc_name} - {poc.designation}
+                              </option>
+                            ))}
+                        </select>
+                        <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                      </div>
+                      <button
+                        type="button"
+                        onClick={() => setIsAddPOCModalOpen(true)}
+                        disabled={!quoteDetails.client}
+                        className="flex-shrink-0 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+                        title="Add New POC"
                       >
-                        <option value="">
-                          {!quoteDetails.client ? 'Select client first' : 'Select POC (Optional)'}
-                        </option>
-                        {quoteDetails.client && clients
-                          .find(c => c.company_name === quoteDetails.client)
-                          ?.pocs.map(poc => (
-                            <option key={poc.id} value={poc.poc_name}>
-                              {poc.poc_name} - {poc.designation}
-                            </option>
-                          ))}
-                      </select>
-                      <ChevronDown size={16} className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
+                        <Plus size={20} strokeWidth={2.5} />
+                      </button>
                     </div>
                   </div>
 
@@ -934,6 +955,18 @@ export default function AddQuotePage() {
         onClose={() => setIsAddClientModalOpen(false)}
         onClientAdded={handleClientAdded}
       />
+
+      {isAddPOCModalOpen && quoteDetails.client && (() => {
+        const selectedClient = clients.find(c => c.company_name === quoteDetails.client);
+        return selectedClient ? (
+          <AddPOCModal
+            companyId={selectedClient.id}
+            companyName={selectedClient.company_name}
+            onSave={handlePOCAdded}
+            onClose={() => setIsAddPOCModalOpen(false)}
+          />
+        ) : null;
+      })()}
 
       {isAddServiceModalOpen && (
         <ModulesTab

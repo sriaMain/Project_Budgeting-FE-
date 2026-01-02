@@ -228,10 +228,7 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 										<div key={group.id} className="group">
 											{/* Group Header */}
 											<div className="px-6 py-3 bg-white flex items-center justify-between border-b border-gray-100">
-												<div className="flex items-center gap-3">
-													<input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" />
-													<span className="text-sm font-medium text-blue-600">{group.name}</span>
-												</div>
+												<span className="text-sm font-medium text-blue-600">{group.name}</span>
 												<span className="text-xs text-gray-500 font-medium">Total {group.projects.length} Project</span>
 											</div>
 
@@ -243,8 +240,7 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 														onClick={() => navigate(`/projects/${project.id}`)}
 														className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-gray-50 transition-colors bg-white cursor-pointer"
 													>
-														<div className="col-span-4 flex items-center gap-3 pl-8">
-															<input type="checkbox" className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" onClick={(e) => e.stopPropagation()} />
+														<div className="col-span-4 flex items-center gap-3">
 															<span className="text-sm font-medium text-gray-900">
 																{project.project_name}
 															</span>
