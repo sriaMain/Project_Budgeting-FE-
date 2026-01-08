@@ -173,7 +173,19 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
     try {
       const response = await axiosInstance.get('tasks/');
       if (response.status === 200 && response.data) {
-        setTasks(response.data);
+        // New API structure: Array of projects with nested Tasks
+        // Flatten the nested structure into a single array of tasks
+        let allTasks: Task[] = [];
+
+        if (Array.isArray(response.data)) {
+          response.data.forEach((projectGroup: any) => {
+            if (projectGroup.Tasks && Array.isArray(projectGroup.Tasks)) {
+              allTasks = [...allTasks, ...projectGroup.Tasks];
+            }
+          });
+        }
+
+        setTasks(allTasks);
       }
     } catch (error) {
       console.error('Failed to fetch tasks:', error);

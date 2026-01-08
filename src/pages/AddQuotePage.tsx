@@ -109,6 +109,7 @@ export default function AddQuotePage() {
   const [isAddClientModalOpen, setIsAddClientModalOpen] = useState(false);
   const [isAddPOCModalOpen, setIsAddPOCModalOpen] = useState(false);
   const [isAddServiceModalOpen, setIsAddServiceModalOpen] = useState(false);
+  const [originalStatus, setOriginalStatus] = useState<string>(''); // Track original status for edit mode
 
   const [quoteDetails, setQuoteDetails] = useState({
     author: username || '',
@@ -177,6 +178,13 @@ export default function AddQuotePage() {
             quoteName: data.project_name || ''
           });
         } else {
+          // Check if quote is confirmed - prevent editing
+          if (data.status?.toLowerCase() === 'confirmed') {
+            toast.error('Cannot edit a confirmed quote');
+            navigate('/pipeline');
+            return;
+          }
+
           // Map quote data
           setQuoteDetails({
             author: data.created_by?.username || username || '',
@@ -187,6 +195,9 @@ export default function AddQuotePage() {
             status: data.status || '',
             quoteName: data.quote_name || ''
           });
+
+          // Store original status to compare later
+          setOriginalStatus(data.status || '');
 
           if (data.items && data.items.length > 0) {
             const mappedItems = data.items.map((item: {
@@ -403,20 +414,25 @@ export default function AddQuotePage() {
           };
         });
 
-      const payload = projectId ? {
+      // Build payload - only include status if it changed (for edit mode)
+      const basePayload = projectId ? {
         project_name: quoteDetails.quoteName?.trim() || '',
         start_date: quoteDetails.dateOfIssue,
         end_date: quoteDetails.dueDate,
         client: selectedClient?.id || null,
-        status: quoteDetails.status,
       } : {
         quote_name: quoteDetails.quoteName?.trim() || '',
         date_of_issue: quoteDetails.dateOfIssue,
         due_date: quoteDetails.dueDate,
         client: selectedClient?.id || null,
-        status: quoteDetails.status,
         ...(pocId && { poc: pocId }),
         items: quoteItems
+      };
+
+      // Only add status if it's a new quote OR if status has changed in edit mode
+      const payload = {
+        ...basePayload,
+        ...(!isEditMode || quoteDetails.status !== originalStatus ? { status: quoteDetails.status } : {})
       };
 
       let response;

@@ -31,7 +31,6 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 }) => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<TabType>('project');
-    const [setQuoteConfirmed, setSetQuoteConfirmed] = useState(true);
     const [projectType, setProjectType] = useState<'internal' | 'external'>('external');
     const [budgetMethod, setBudgetMethod] = useState<'quoted' | 'manual'>('quoted');
     const [isSaving, setIsSaving] = useState(false);
@@ -71,18 +70,21 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 
         setIsSaving(true);
         try {
-            // If "Set quote as Confirmed" is enabled and we have a quoteId, update the quote status first
-            if (setQuoteConfirmed && quoteId) {
+            // First, automatically toggle the quote to Confirmed status
+            if (quoteId) {
                 try {
+                    console.log(`Updating quote ${quoteId} status to Confirmed...`);
                     await axiosInstance.put(`/quotes/${quoteId}/`, {
                         status: 'Confirmed'
                     });
-                    console.log('Quote status updated to Confirmed');
-                } catch (error) {
+                    console.log('Quote status updated to Confirmed successfully');
+                    toast.success('Quote status updated to Confirmed');
+                } catch (error: any) {
                     console.error('Error updating quote status:', error);
-                    toast.error('Failed to confirm quote status');
+                    const errorMsg = error.response?.data?.message || 'Failed to update quote status to Confirmed';
+                    toast.error(errorMsg);
                     setIsSaving(false);
-                    return; // Don't proceed with project creation if quote confirmation fails
+                    return; // Stop if we can't confirm the quote
                 }
             }
 
@@ -119,9 +121,20 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                 console.log('Project created successfully:', response.data);
                 toast.success('Project created successfully');
 
-                // Try to get ID from different possible fields
-                const newProjectId = response.data.project.project_no || response.data.pk;
-                console.log(newProjectId);
+                // Extract project ID from the actual response structure
+                let newProjectId;
+
+                // The backend returns: { Projects: [{ company_name: "...", project_details: [...] }] }
+                if (response.data.Projects && response.data.Projects.length > 0) {
+                    const projectDetails = response.data.Projects[0].project_details;
+                    if (projectDetails && projectDetails.length > 0) {
+                        // Get the last project (the newly created one)
+                        newProjectId = projectDetails[projectDetails.length - 1].project_no;
+                    }
+                }
+
+                console.log('Extracted project ID:', newProjectId);
+
                 if (newProjectId) {
                     console.log('Navigating to project:', newProjectId);
                     navigate(`/projects/${newProjectId}`);
@@ -158,24 +171,9 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                     onClick={(e) => e.stopPropagation()}
                 >
                     {/* Header */}
-                    <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 flex items-center justify-between z-10">
-                        <h2 className="text-xl font-bold text-gray-900">Create Project</h2>
-                        <div className="flex items-center gap-4">
-                            {/* Set quote as Confirmed Toggle */}
-                            <div className="flex items-center gap-2">
-                                <label className="relative inline-flex items-center cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={setQuoteConfirmed}
-                                        onChange={(e) => setSetQuoteConfirmed(e.target.checked)}
-                                        className="sr-only peer"
-                                    />
-                                    <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-green-500"></div>
-                                </label>
-                                <span className="text-sm font-medium text-gray-700">
-                                    Set quote as Confirmed
-                                </span>
-                            </div>
+                    <div className="sticky top-0 bg-white border-b border-gray-200 px-6 py-4 z-10">
+                        <div className="flex items-center justify-between mb-2">
+                            <h2 className="text-xl font-bold text-gray-900">Create Project</h2>
                             <button
                                 onClick={onClose}
                                 className="p-1 hover:bg-gray-100 rounded transition-colors"
@@ -184,6 +182,10 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                 <X size={24} className="text-gray-600" />
                             </button>
                         </div>
+                        {/* Static informational text */}
+                        <p className="text-sm text-gray-600 mt-2">
+                            Move questions to Confirmed & Create Project.
+                        </p>
                     </div>
 
                     {/* Tabs */}

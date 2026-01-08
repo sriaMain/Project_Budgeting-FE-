@@ -4,14 +4,14 @@ import store from "../store/store";
 const axiosRefresh = axios.create({
   baseURL:
     // import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/",
-    "http://192.168.0.174:8000/api/",
+    "http://192.168.0.230:8000/api/",
   withCredentials: true,
 });
 
 const axiosInstance = axios.create({
   baseURL:
     // import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/",
-    "http://192.168.0.174:8000/api/",
+    "http://192.168.0.230:8000/api/",
   withCredentials: true,
 });
 
@@ -32,6 +32,12 @@ axiosInstance.interceptors.response.use(
 
   async (error) => {
     const originalRequest = error.config;
+
+    // Check if this request should skip auth redirect
+    if (originalRequest.skipAuthRedirect) {
+      console.log('Skipping auth redirect for this request');
+      return Promise.reject(error);
+    }
 
     if (
       error.response &&

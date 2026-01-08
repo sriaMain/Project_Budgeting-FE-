@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
-import { useNavigate, useParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Plus, Calendar, Search, Filter } from 'lucide-react';
 import axiosInstance from '../utils/axiosInstance';
 import { ReusableTable } from '../components/ReusableTable';
@@ -41,6 +41,7 @@ interface ProjectDetailsPageProps {
 const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, currentPage, onNavigate }) => {
     const { projectId } = useParams<{ projectId: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
     const [activeTab, setActiveTab] = useState<string>('Tasks');
     const [activeSubTab, setActiveSubTab] = useState<string>('Task list');
     const [budgetSubTab, setBudgetSubTab] = useState<string>('Budget health');
@@ -57,13 +58,35 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
     const [selectedTaskForAssignment, setSelectedTaskForAssignment] = useState<Task | null>(null);
     const [tasks, setTasks] = useState<Task[]>([]);
     const [isLoadingTasks, setIsLoadingTasks] = useState(true);
+    const [firstQuoteId, setFirstQuoteId] = useState<number | null>(null);
+    const [invoices, setInvoices] = useState<any[]>([]);
+    const [isLoadingInvoices, setIsLoadingInvoices] = useState(false);
+    const [projectQuotation, setProjectQuotation] = useState<any>(null);
+    const [isLoadingQuotation, setIsLoadingQuotation] = useState(false);
+    const [payments, setPayments] = useState<any[]>([]);
+    const [isLoadingPayments, setIsLoadingPayments] = useState(false);
+
+    // Handle tab query parameter
+    useEffect(() => {
+        const tabParam = searchParams.get('tab');
+        if (tabParam) {
+            setActiveTab(tabParam);
+        }
+    }, [searchParams]);
 
     useEffect(() => {
         const fetchProjectDetails = async () => {
             if (!projectId) return;
             try {
                 const response = await axiosInstance.get(`/projects/${projectId}/`);
-                setProject(response.data);
+                const projectData = response.data;
+                setProject(projectData);
+
+                // Extract invoices from project data
+                if (projectData.invoices && Array.isArray(projectData.invoices)) {
+                    console.log('Project invoices from API:', projectData.invoices);
+                    setInvoices(projectData.invoices);
+                }
             } catch (error) {
                 console.error('Error fetching project details:', error);
             } finally {
@@ -72,7 +95,70 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
         };
 
         fetchProjectDetails();
+        fetchFirstQuote();
     }, [projectId]);
+
+    // Fetch first available quote for invoice generation
+    const fetchFirstQuote = async () => {
+        try {
+            const response = await axiosInstance.get('/pipeline-data/');
+            if (response.data && response.data.stages) {
+                // Find first quote from any stage
+                for (const stage of response.data.stages) {
+                    if (stage.quotes && stage.quotes.length > 0) {
+                        setFirstQuoteId(stage.quotes[0].quote_no);
+                        return;
+                    }
+                }
+            }
+        } catch (error) {
+            console.error('Error fetching quotes:', error);
+        }
+    };
+
+    // Fetch payments for all project invoices
+    const fetchProjectPayments = async () => {
+        if (!invoices || invoices.length === 0) {
+            setPayments([]);
+            return;
+        }
+
+        try {
+            setIsLoadingPayments(true);
+            // Fetch payments for each invoice
+            const paymentPromises = invoices.map(invoice =>
+                axiosInstance.get(`/invoices/${invoice.id}/payments/`)
+            );
+
+            const responses = await Promise.all(paymentPromises);
+
+            // Combine all payments from all invoices
+            const allPayments = responses.flatMap(response => response.data || []);
+
+            console.log('Project payments:', allPayments);
+            setPayments(allPayments);
+        } catch (error) {
+            console.error('Error fetching payments:', error);
+            setPayments([]);
+        } finally {
+            setIsLoadingPayments(false);
+        }
+    };
+
+    // Fetch quotation for this project
+    const fetchProjectQuotation = async (quotationId: number) => {
+        try {
+            setIsLoadingQuotation(true);
+            const response = await axiosInstance.get(`/quotes/${quotationId}/`);
+            console.log('Project quotation:', response.data);
+            setProjectQuotation(response.data);
+        } catch (error) {
+            console.error('Error fetching project quotation:', error);
+            setProjectQuotation(null);
+        } finally {
+            setIsLoadingQuotation(false);
+        }
+    };
 
     // Fetch tasks for this project
     useEffect(() => {
@@ -107,6 +193,23 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
 
         fetchProjectTasks();
     }, [projectId]);
+
+    // Fetch quotation when Finances tab is active
+    useEffect(() => {
+        if (activeTab === 'Finances') {
+            // Fetch quotation if project was created from one
+            if (project?.created_from_quotation) {
+                fetchProjectQuotation(project.created_from_quotation);
+            }
+        }
+    }, [activeTab, projectId, project]);
+
+    // Fetch payments when invoices are loaded
+    useEffect(() => {
+        if (invoices.length > 0) {
+            fetchProjectPayments();
+        }
+    }, [invoices]);
 
     const handleTaskAdded = async (newTask: any) => {
         console.log('Task created for project:', newTask);
@@ -199,15 +302,6 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                 return 'bg-gray-100 text-gray-800';
         }
     };
-
-
-
-    const payments: Payment[] = [
-        { id: 1, date: '2025-11-12', type: 'Incoming', amount: 0.00, clientVendor: 'Client 1', reference: 'INV - 1', paymentMethod: 'Credit Card' },
-        { id: 2, date: '2025-11-1', type: 'Outgoing', amount: 0.00, clientVendor: 'Client 1', reference: 'INV - 1', paymentMethod: 'Credit Card' },
-        { id: 3, date: '2025-11-12', type: 'Incoming', amount: 0.00, clientVendor: 'Client 1', reference: 'INV - 1', paymentMethod: 'Credit Card' },
-        { id: 4, date: '2025-11-2', type: 'Outgoing', amount: 0.00, clientVendor: 'Client 1', reference: 'INV - 1', paymentMethod: 'Credit Card' },
-    ];
 
 
 
@@ -612,7 +706,42 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                         </button>
                                     </div>
                                     <div className="px-6 py-4 bg-white">
-                                        <p className="text-gray-500 text-sm">No quotes to display</p>
+                                        {isLoadingQuotation ? (
+                                            <p className="text-gray-500 text-sm">Loading quotation...</p>
+                                        ) : projectQuotation ? (
+                                            <div
+                                                onClick={() => navigate(`/pipeline/quote/${projectQuotation.quote_no}`)}
+                                                className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-gray-100"
+                                            >
+                                                <div className="flex-1">
+                                                    <div className="flex items-center gap-3">
+                                                        <span className="font-medium text-gray-900">
+                                                            Quote #{projectQuotation.quote_no}
+                                                        </span>
+                                                        <span className={`px-2 py-1 rounded-full text-xs font-medium ${projectQuotation.status === 'Confirmed'
+                                                            ? 'bg-green-50 text-green-700'
+                                                            : projectQuotation.status === 'Sent'
+                                                                ? 'bg-blue-50 text-blue-700'
+                                                                : 'bg-gray-50 text-gray-700'
+                                                            }`}>
+                                                            {projectQuotation.status || 'Draft'}
+                                                        </span>
+                                                    </div>
+                                                    <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                                                        <span>{projectQuotation.quote_name || 'Untitled Quote'}</span>
+                                                        <span>Amount: ₹{projectQuotation.total_amount || '0'}</span>
+                                                        {projectQuotation.date_of_issue && (
+                                                            <span>Date: {new Date(projectQuotation.date_of_issue).toLocaleDateString()}</span>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                </svg>
+                                            </div>
+                                        ) : (
+                                            <p className="text-gray-500 text-sm">No quotes to display</p>
+                                        )}
                                     </div>
                                 </div>
 
@@ -620,10 +749,65 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
                                         <h3 className="font-semibold text-blue-600 text-sm">Invoices</h3>
-                                        <button className="text-black-800 text-sm font-medium hover:text-blue-700">New Invoices</button>
+                                        <button
+                                            onClick={() => {
+                                                const quotationId = project?.created_from_quotation;
+                                                if (quotationId) {
+                                                    navigate(`/generate-invoice/${quotationId}`);
+                                                } else {
+                                                    toast.error('No quotation associated with this project.');
+                                                }
+                                            }}
+                                            className="text-black-800 text-sm font-medium hover:text-blue-700"
+                                        >
+                                            New Invoice
+                                        </button>
                                     </div>
                                     <div className="px-6 py-4 bg-white">
-                                        <p className="text-gray-500 text-sm">No invoices to display</p>
+                                        {isLoadingInvoices ? (
+                                            <p className="text-gray-500 text-sm">Loading invoices...</p>
+                                        ) : invoices.length === 0 ? (
+                                            <p className="text-gray-500 text-sm">No invoices to display</p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {invoices.map((invoice: any) => (
+                                                    <div
+                                                        key={invoice.id}
+                                                        onClick={() => navigate(`/invoices/${invoice.id}`)}
+                                                        className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-gray-100"
+                                                    >
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="font-medium text-gray-900">
+                                                                    {invoice.invoice_no || `Invoice #${invoice.id}`}
+                                                                </span>
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${invoice.payment_status === 'Paid' || invoice.status_display === 'Paid'
+                                                                    ? 'bg-green-50 text-green-700'
+                                                                    : 'bg-yellow-50 text-yellow-700'
+                                                                    }`}>
+                                                                    {invoice.payment_status || invoice.status_display || 'Unpaid'}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                                                                <span>Total: ₹{invoice.total_amount || invoice.total || '0'}</span>
+                                                                {invoice.paid_amount && parseFloat(invoice.paid_amount) > 0 && (
+                                                                    <span>Paid: ₹{invoice.paid_amount}</span>
+                                                                )}
+                                                                {invoice.balance_amount && (
+                                                                    <span>Balance: ₹{invoice.balance_amount}</span>
+                                                                )}
+                                                                {invoice.issue_date && (
+                                                                    <span>Date: {new Date(invoice.issue_date).toLocaleDateString()}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                        </svg>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -766,65 +950,63 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 </div>
 
                                 {/* Payments Table using ReusableTable */}
-                                <ReusableTable<Payment>
-                                    data={payments.filter(payment => {
-                                        // Type filter
-                                        const typeMatch = paymentTypeFilter === 'All' || payment.type === paymentTypeFilter;
-                                        // Search filter
-                                        const searchLower = paymentSearch.toLowerCase();
-                                        const searchMatch = paymentSearch === '' ||
-                                            payment.clientVendor.toLowerCase().includes(searchLower) ||
-                                            payment.reference.toLowerCase().includes(searchLower) ||
-                                            payment.paymentMethod.toLowerCase().includes(searchLower) ||
-                                            payment.date.toLowerCase().includes(searchLower);
-                                        return typeMatch && searchMatch;
-                                    })}
-                                    columns={[
-                                        {
-                                            header: 'DATE',
-                                            accessor: 'date',
-                                            className: 'uppercase text-xs'
-                                        },
-                                        {
-                                            header: 'TYPE',
-                                            accessor: (payment) => (
-                                                <span className={`inline-flex items-center px-3 py-1 rounded-full text-xs font-medium ${payment.type === 'Incoming'
-                                                    ? 'bg-green-500 text-white'
-                                                    : 'bg-red-500 text-white'
-                                                    }`}>
-                                                    {payment.type}
-                                                </span>
-                                            ),
-                                            className: 'uppercase text-xs'
-                                        },
-                                        {
-                                            header: 'AMOUNT',
-                                            accessor: (payment) => `$ ${payment.amount.toFixed(2)}`,
-                                            className: 'uppercase text-xs'
-                                        },
-                                        {
-                                            header: 'CLIENT/VENDOR',
-                                            accessor: 'clientVendor',
-                                            className: 'uppercase text-xs'
-                                        },
-                                        {
-                                            header: 'REFERENCE',
-                                            accessor: (payment) => (
-                                                <a href="#" className="text-sm text-blue-600 hover:text-blue-800 hover:underline">
-                                                    {payment.reference}
-                                                </a>
-                                            ),
-                                            className: 'uppercase text-xs'
-                                        },
-                                        {
-                                            header: 'PAYMENT METHOD',
-                                            accessor: 'paymentMethod',
-                                            className: 'uppercase text-xs'
-                                        }
-                                    ]}
-                                    keyField="id"
-                                    emptyMessage="No payments found"
-                                />
+                                {isLoadingPayments ? (
+                                    <div className="text-center py-8 text-gray-500">Loading payments...</div>
+                                ) : (
+                                    <ReusableTable<any>
+                                        data={payments.filter(payment => {
+                                            // Search filter
+                                            const searchLower = paymentSearch.toLowerCase();
+                                            const searchMatch = paymentSearch === '' ||
+                                                payment.invoice_no?.toLowerCase().includes(searchLower) ||
+                                                payment.reference_no?.toLowerCase().includes(searchLower) ||
+                                                payment.payment_method_display?.toLowerCase().includes(searchLower) ||
+                                                payment.payment_date?.toLowerCase().includes(searchLower);
+                                            return searchMatch;
+                                        })}
+                                        columns={[
+                                            {
+                                                header: 'DATE',
+                                                accessor: (payment) => new Date(payment.payment_date).toLocaleDateString(),
+                                                className: 'uppercase text-xs'
+                                            },
+                                            {
+                                                header: 'INVOICE',
+                                                accessor: (payment) => (
+                                                    <span
+                                                        onClick={() => navigate(`/invoices/${payment.invoice}`)}
+                                                        className="text-sm text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                                    >
+                                                        {payment.invoice_no}
+                                                    </span>
+                                                ),
+                                                className: 'uppercase text-xs'
+                                            },
+                                            {
+                                                header: 'AMOUNT',
+                                                accessor: (payment) => `₹ ${parseFloat(payment.amount).toFixed(2)}`,
+                                                className: 'uppercase text-xs'
+                                            },
+                                            {
+                                                header: 'PAYMENT METHOD',
+                                                accessor: 'payment_method_display',
+                                                className: 'uppercase text-xs'
+                                            },
+                                            {
+                                                header: 'REFERENCE',
+                                                accessor: 'reference_no',
+                                                className: 'uppercase text-xs'
+                                            },
+                                            {
+                                                header: 'NOTES',
+                                                accessor: (payment) => payment.notes || '-',
+                                                className: 'uppercase text-xs'
+                                            }
+                                        ]}
+                                        keyField="id"
+                                        emptyMessage="No payments found"
+                                    />
+                                )}
                             </div>
                         )}
                     </div>

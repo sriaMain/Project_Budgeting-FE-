@@ -97,20 +97,37 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 	const fetchProjects = async () => {
 		try {
 			const response = await axiosInstance.get('projects/');
-			const data = Array.isArray(response.data) ? response.data : [];
 
-			const mappedData = data.map((p: any) => ({
+			// Handle the nested structure: response.data.Projects is an array of companies
+			// Each company has project_details array
+			let allProjects: any[] = [];
+
+			if (response.data && response.data.Projects && Array.isArray(response.data.Projects)) {
+				// Flatten the nested structure
+				response.data.Projects.forEach((company: any) => {
+					if (company.project_details && Array.isArray(company.project_details)) {
+						// Add company_name to each project for grouping
+						const projectsWithCompany = company.project_details.map((p: any) => ({
+							...p,
+							company_name: company.company_name
+						}));
+						allProjects = [...allProjects, ...projectsWithCompany];
+					}
+				});
+			}
+
+			const mappedData = allProjects.map((p: any) => ({
 				id: p.project_no, // Map project_no to id
 				project_name: p.project_name,
-				project_type: p.project_type,
+				project_type: p.project_type || 'external', // Default to external if not specified
 				client: p.client || null,
-				client_name: p.client_details?.name || (p.project_type === 'internal' ? 'Internal' : 'Unknown Client'),
+				client_name: p.company_name || 'Unknown Client', // Use company_name from API
 				start_date: p.start_date,
 				end_date: p.end_date,
-				status: p.status || 'In Progress', // Default if missing
+				status: p.status || 'planning', // Use the status from API
 				progress: p.progress || 0, // Default if missing
 				income: p.budget?.total_budget ? Number(p.budget.total_budget) : 0, // Use budget as proxy or 0
-				forecasted_profit: p.budget?.forecasted_profit || 0, // Default if missing
+				forecasted_profit: p.budget?.forecasted_profit ? Number(p.budget.forecasted_profit) : 0, // Parse forecasted_profit
 				budget: p.budget
 			}));
 

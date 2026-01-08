@@ -17,6 +17,8 @@ import PipelineScreen from "./pages/PipelineScreen";
 import QuoteDetailsPage from "./pages/QuoteDetailsPage";
 import AddQuotePage from "./pages/AddQuotePage";
 import ProfilePage from "./pages/ProfilePage";
+import InvoiceDetailsScreen from "./pages/InvoiceDetailsScreen";
+import GenerateInvoicePage from "./pages/GenerateInvoicePage";
 import { initializeAuth } from "./auth/authThunk";
 import { useAppSelector } from "./hooks/useAppSelector";
 
@@ -192,6 +194,30 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <AddQuotePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Generate Invoice Page (Full Screen) */}
+          <Route
+            path="/generate-invoice/:quotationId"
+            element={
+              <ProtectedRoute>
+                <GenerateInvoicePage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Invoice Details Screen */}
+          <Route
+            path="/invoices/:invoiceId"
+            element={
+              <ProtectedRoute>
+                <InvoiceDetailsScreen
+                  userRole={userRole}
+                  currentPage={currentPage}
+                  onNavigate={handleNavigate}
+                />
               </ProtectedRoute>
             }
           />

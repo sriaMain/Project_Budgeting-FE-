@@ -4,7 +4,7 @@
  */
 
 import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { Edit, FileText, Share2, Send, Receipt, Loader2, Plus } from 'lucide-react';
 import { Layout } from '../components/Layout';
 import { InfoDisplay } from '../components/InfoDisplay';
@@ -71,6 +71,8 @@ export default function QuoteDetailsPage({
 }: QuoteDetailsPageProps) {
     const { quoteNo } = useParams<{ quoteNo: string }>();
     const navigate = useNavigate();
+    const [searchParams] = useSearchParams();
+    const mode = searchParams.get('mode'); // 'invoice' or null
     const [isCreateProjectModalOpen, setIsCreateProjectModalOpen] = useState(false);
     const [isAddPOCModalOpen, setIsAddPOCModalOpen] = useState(false);
     const [quoteData, setQuoteData] = useState<QuoteData | null>(null);
@@ -107,19 +109,6 @@ export default function QuoteDetailsPage({
         }
     };
 
-    const handleInvoice = async () => {
-        try {
-            setIsActionLoading(true);
-            await axiosInstance.post(`/quotes/${quoteNo}/invoice/`);
-            toast.success('Invoice created successfully');
-        } catch (error) {
-            console.error('Error creating invoice:', error);
-            toast.error('Failed to create invoice');
-        } finally {
-            setIsActionLoading(false);
-        }
-    };
-
     const handleShare = async () => {
         try {
             setIsActionLoading(true);
@@ -140,7 +129,7 @@ export default function QuoteDetailsPage({
     const handleDownloadPDF = async () => {
         try {
             setIsActionLoading(true);
-            const response = await axiosInstance.get(`/quotes/${quoteNo}/invoice/`, {
+            const response = await axiosInstance.get(`/quotes/${quoteNo}/pdf`, {
                 responseType: 'blob'
             });
 
@@ -181,6 +170,11 @@ export default function QuoteDetailsPage({
     ];
 
     const handleEdit = () => {
+        // Prevent editing if quote is confirmed
+        if (quoteData?.status?.toLowerCase() === 'confirmed') {
+            toast.error('Cannot edit a confirmed quote');
+            return;
+        }
         navigate(`/pipeline/edit-quote/${quoteNo}`);
     };
 
@@ -213,18 +207,26 @@ export default function QuoteDetailsPage({
         );
     }
 
+    // Check if quote is confirmed
+    const isConfirmed = quoteData.status?.toLowerCase() === 'confirmed';
+
     return (
         <Layout userRole={userRole} currentPage={currentPage} onNavigate={onNavigate}>
             <div className="space-y-6">
                 {/* Header */}
                 <div className="flex items-center justify-between">
                     <h1 className="text-2xl font-bold text-gray-900">Quote Details</h1>
-                    <div className="flex gap-4">
+                    <div className="flex gap-3">
                         <button
                             onClick={handleEdit}
-                            className="px-4 py-2 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200"
+                            disabled={isConfirmed}
+                            className={`p-2 rounded-lg transition-colors ${isConfirmed
+                                ? 'bg-gray-100 cursor-not-allowed opacity-50'
+                                : 'hover:bg-gray-100'
+                                }`}
+                            title={isConfirmed ? 'Cannot edit confirmed quote' : 'Edit quote'}
                         >
-                            <Edit className="w-4 h-4 mr-2" />
+                            <Edit className={`w-5 h-5 ${isConfirmed ? 'text-gray-400' : 'text-gray-600'}`} />
                         </button>
                     </div>
                 </div>
@@ -258,25 +260,48 @@ export default function QuoteDetailsPage({
                                 }
                             />
                         </div>
-                        {/* Only show Create Project button when status is Confirmed */}
-                        {quoteData.status.toLowerCase() === 'confirmed' && (
-                            <button
-                                onClick={() => {
-                                    if (!quoteData.has_project) {
-                                        setIsCreateProjectModalOpen(true);
-                                    }
-                                }}
-                                disabled={quoteData.has_project}
-                                className={`px-4 py-2 w-50 font-medium rounded-lg transition-colors duration-200 ${
-                                    quoteData.has_project
+                    </div>
+
+                    {/* Create Project Button - Separate row for better visibility */}
+                    {(() => {
+                        const status = (quoteData.status || '').toLowerCase().trim();
+                        // Handle various status formats including typos (oppurtunity vs opportunity)
+                        const allowedStatuses = ['opportunity', 'oppurtunity', 'scoping', 'proposal', 'confirmed'];
+                        const isInvoiceMode = mode === 'invoice';
+                        const shouldShow = !isInvoiceMode && allowedStatuses.includes(status);
+
+                        console.log('=== Create Project Button Debug ===');
+                        console.log('Original Status:', quoteData.status);
+                        console.log('Normalized Status:', status);
+                        console.log('Mode:', mode);
+                        console.log('Is Invoice Mode:', isInvoiceMode);
+                        console.log('Allowed Statuses:', allowedStatuses);
+                        console.log('Status Match:', allowedStatuses.includes(status));
+                        console.log('Has Project:', quoteData.has_project);
+                        console.log('Should Show Button:', shouldShow);
+                        console.log('===================================');
+
+                        if (!shouldShow) return null;
+
+                        return (
+                            <div className="mt-4">
+                                <button
+                                    onClick={() => {
+                                        if (!quoteData.has_project) {
+                                            setIsCreateProjectModalOpen(true);
+                                        }
+                                    }}
+                                    disabled={quoteData.has_project}
+                                    className={`px-4 py-2 font-medium rounded-lg transition-colors duration-200 ${quoteData.has_project
                                         ? 'bg-gray-300 text-gray-600 cursor-not-allowed opacity-60'
                                         : 'bg-purple-200 text-black hover:bg-purple-300'
-                                }`}
-                            >
-                                {quoteData.has_project ? 'Project Already Created' : 'Create Project'}
-                            </button>
-                        )}
-                    </div>
+                                        }`}
+                                >
+                                    {quoteData.has_project ? 'Project Already Created' : 'Create Project'}
+                                </button>
+                            </div>
+                        );
+                    })()}
                 </div>
 
                 {/* Products Table */}
@@ -326,14 +351,6 @@ export default function QuoteDetailsPage({
                         {isActionLoading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Share2 size={18} />}
                         <span>Share via link</span>
                     </button>
-                    {/* <button
-                        onClick={handleInvoice}
-                        disabled={isActionLoading}
-                        className="flex items-center gap-2 px-5 py-2.5 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium shadow-sm disabled:opacity-50"
-                    >
-                        <Receipt size={18} />
-                        <span>Invoice</span>
-                    </button> */}
                     <button
                         onClick={handleSend}
                         disabled={isActionLoading}
