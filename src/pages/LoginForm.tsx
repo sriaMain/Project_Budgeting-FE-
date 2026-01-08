@@ -109,8 +109,18 @@ export const LoginForm: React.FC = () => {
       const response = await axiosInstance.post("/accounts/login/", payLoad);
 
       if (response.status === 200) {
-        // Map roles array to userRole (take first role and convert to lowercase)
-        const userRole = response.data.user.roles[0]?.toLowerCase() || 'user';
+        // Map roles array to userRole
+        const backendRole = response.data.user.roles[0] || 'user';
+        
+        // Map backend roles to frontend roles
+        let userRole: 'admin' | 'user' | 'manager' = 'user';
+        if (backendRole.toLowerCase() === 'admin') {
+          userRole = 'admin';
+        } else if (backendRole.toLowerCase() === 'project manager' || backendRole.toLowerCase() === 'manager') {
+          userRole = 'manager';
+        } else {
+          userRole = 'user';
+        }
         
         dispatch({ 
           type: "auth/loginSuccess", 

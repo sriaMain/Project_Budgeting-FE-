@@ -61,12 +61,27 @@ export function AddTaskModal({
     editingTask,
     onTaskUpdated
 }: AddTaskModalProps) {
+    // Helper function to convert decimal hours to HH:MM format
+    const decimalToHHMM = (decimalHours: number | string): string => {
+        const decimal = typeof decimalHours === 'string' ? parseFloat(decimalHours) : decimalHours;
+        if (isNaN(decimal)) return '00:00';
+        const hours = Math.floor(decimal);
+        const minutes = Math.round((decimal - hours) * 60);
+        return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}`;
+    };
+
+    // Helper function to convert HH:MM format to decimal hours
+    const hhmmToDecimal = (hhmmString: string): number => {
+        const [hours, minutes] = hhmmString.split(':').map(Number);
+        return hours + (minutes / 60);
+    };
+
     const [formData, setFormData] = useState({
         title: '',
         assignee_id: 0,
         project: prefilledProjectId || 0,
         status: '',
-        allocated_hours: ''
+        allocated_hours: '00:00' // Changed to HH:MM format
 
     });
 
@@ -124,7 +139,7 @@ export function AddTaskModal({
                 assignee_id: 0,
                 project: prefilledProjectId || 0,
                 status: '',
-                allocated_hours: ''
+                allocated_hours: '00:00'
             });
             setAssigneeSearch('');
             setProjectSearch('');
@@ -139,7 +154,7 @@ export function AddTaskModal({
                 setFormData(prev => ({
                     ...prev,
                     title: editingTask.title || prev.title,
-                    allocated_hours: editingTask.allocated_hours?.toString() || prev.allocated_hours,
+                    allocated_hours: editingTask.allocated_hours ? decimalToHHMM(editingTask.allocated_hours) : prev.allocated_hours,
                     status: editingTask.status || prev.status,
                     project: editingTask.project || prev.project,
                     assignee_id: editingTask.assigned_to?.id || prev.assignee_id || 0,
@@ -299,10 +314,17 @@ export function AddTaskModal({
             newErrors.title = 'Task title must be at least 3 characters';
         }
 
+        // Validate HH:MM format for allocated hours
+        const timePattern = /^([0-9]{1,2}):([0-5][0-9])$/;
         if (!formData.allocated_hours) {
             newErrors.allocated_hours = 'Allocated hours is required';
-        } else if (isNaN(Number(formData.allocated_hours)) || Number(formData.allocated_hours) <= 0) {
-            newErrors.allocated_hours = 'Please enter a valid number of hours';
+        } else if (!timePattern.test(formData.allocated_hours)) {
+            newErrors.allocated_hours = 'Please enter time in HH:MM format (e.g., 05:30)';
+        } else {
+            const decimalHours = hhmmToDecimal(formData.allocated_hours);
+            if (decimalHours <= 0) {
+                newErrors.allocated_hours = 'Allocated hours must be greater than 00:00';
+            }
         }
 
         setErrors(newErrors);
@@ -320,7 +342,7 @@ export function AddTaskModal({
 
         const payload = {
             title: formData.title.trim(),
-            allocated_hours: parseFloat(formData.allocated_hours),
+            allocated_hours: hhmmToDecimal(formData.allocated_hours),
             ...(formData.status && { status: formData.status }),
             // prefer selectedUserId (from service->user selector) over freeform assignee_id
             ...(selectedUserId && { assigned_to: selectedUserId }),
@@ -571,17 +593,16 @@ export function AddTaskModal({
                                     <span className="text-red-500 mr-1">*</span>Allocated Hours
                                 </label>
                                 <input
-                                    type="number"
-                                    step="0.5"
-                                    min="0"
+                                    type="text"
                                     value={formData.allocated_hours}
                                     onChange={(e) => {
                                         setFormData({ ...formData, allocated_hours: e.target.value });
                                         setErrors(prev => ({ ...prev, allocated_hours: '' }));
                                     }}
-                                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm ${errors.allocated_hours ? 'border-red-500 bg-red-50' : 'border-gray-300'
+                                    className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm font-mono ${errors.allocated_hours ? 'border-red-500 bg-red-50' : 'border-gray-300'
                                         }`}
-                                    placeholder="Enter hours (e.g., 8 or 8.5)"
+                                    placeholder="HH:MM (e.g., 08:30)"
+                                    pattern="[0-9]{1,2}:[0-5][0-9]"
                                 />
                                 {errors.allocated_hours && (
                                     <p className="text-xs text-red-600 mt-1">{errors.allocated_hours}</p>

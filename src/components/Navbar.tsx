@@ -34,7 +34,8 @@ export const Navbar: React.FC<NavbarProps> = ({ userRole }) => {
     { label: 'Contacts', icon: <Users size={18} />, roles: ['admin', 'manager'], path: '/contacts' },
     { label: 'Tasks', icon: <CheckSquare size={18} />, roles: ['admin', 'manager', 'user', 'employee'], path: '/task-management' },
     { label: 'Profile', icon: <Users size={18} />, roles: ['employee'], path: '/profile' },
-    { label: 'Administration', icon: <Settings size={18} />, roles: ['admin'], path: '/administration' },
+    // Administration for both admin and manager, but manager only sees Manage Modules tab
+    { label: 'Administration', icon: <Settings size={18} />, roles: ['admin', 'manager'], path: '/administration' },
   ];
 
   return (

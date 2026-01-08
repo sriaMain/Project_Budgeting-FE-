@@ -8,7 +8,7 @@ import ModulesTab from '../components/ModulesTab';
 import ManageUsersTab from '../components/ManageUsersTab';
 
 interface AdministrationScreenProps {
-  userRole: 'admin' | 'user';
+  userRole: 'admin' | 'user' | 'manager';
   currentPage: string;
   onNavigate: (page: string) => void;
 }
@@ -105,7 +105,10 @@ const PermissionsCell: React.FC<{ permissions: Permission[] }> = ({ permissions 
 };
 
 const AdministrationScreen: React.FC<AdministrationScreenProps> = ({ userRole, currentPage, onNavigate }) => {
-  const [activeTab, setActiveTab] = useState<'manage-roles' | 'modules' | 'manage-users'>('manage-roles');
+  // For manager role, default to 'modules' tab; for admin, default to 'manage-roles'
+  const [activeTab, setActiveTab] = useState<'manage-roles' | 'modules' | 'manage-users'>(
+    userRole === 'manager' ? 'modules' : 'manage-roles'
+  );
   const [currentView, setCurrentView] = useState<'list' | 'add-role'>('list');
   const [editingRole, setEditingRole] = useState<Role | null>(null);
 
@@ -186,18 +189,23 @@ const AdministrationScreen: React.FC<AdministrationScreenProps> = ({ userRole, c
 
             {/* Top Navigation Tabs */}
             <div className="flex flex-wrap gap-4 mb-8">
-              <button
-                onClick={() => setActiveTab('manage-roles')}
-                className={`
-                    px-6 py-2.5 rounded-lg border-2 font-bold text-lg transition-all
-                    ${activeTab === 'manage-roles'
-                    ? 'bg-white border-blue-600 text-gray-900 shadow-sm'
-                    : 'bg-gray-200 border-transparent text-gray-500 hover:bg-gray-300'
-                  }
-                `}
-              >
-                Manage Roles
-              </button>
+              {/* Manage Roles - Only for admin */}
+              {userRole === 'admin' && (
+                <button
+                  onClick={() => setActiveTab('manage-roles')}
+                  className={`
+                      px-6 py-2.5 rounded-lg border-2 font-bold text-lg transition-all
+                      ${activeTab === 'manage-roles'
+                      ? 'bg-white border-blue-600 text-gray-900 shadow-sm'
+                      : 'bg-gray-200 border-transparent text-gray-500 hover:bg-gray-300'
+                    }
+                  `}
+                >
+                  Manage Roles
+                </button>
+              )}
+              
+              {/* Modules - For both admin and manager */}
               <button
                 onClick={() => setActiveTab('modules')}
                 className={`
@@ -210,18 +218,22 @@ const AdministrationScreen: React.FC<AdministrationScreenProps> = ({ userRole, c
               >
                 Modules
               </button>
-              <button
-                onClick={() => setActiveTab('manage-users')}
-                className={`
-                    px-6 py-2.5 rounded-lg border-2 font-bold text-lg transition-all
-                    ${activeTab === 'manage-users'
-                    ? 'bg-white border-blue-600 text-gray-900 shadow-sm'
-                    : 'bg-gray-200 border-transparent text-gray-500 hover:bg-gray-300'
-                  }
-                `}
-              >
-                Manage Users
-              </button>
+              
+              {/* Manage Users - Only for admin */}
+              {userRole === 'admin' && (
+                <button
+                  onClick={() => setActiveTab('manage-users')}
+                  className={`
+                      px-6 py-2.5 rounded-lg border-2 font-bold text-lg transition-all
+                      ${activeTab === 'manage-users'
+                      ? 'bg-white border-blue-600 text-gray-900 shadow-sm'
+                      : 'bg-gray-200 border-transparent text-gray-500 hover:bg-gray-300'
+                    }
+                  `}
+                >
+                  Manage Users
+                </button>
+              )}
             </div>
 
             {activeTab === 'manage-roles' && (

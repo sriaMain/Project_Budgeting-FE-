@@ -98,15 +98,40 @@ export const useTaskTimer = (): UseTaskTimerReturn => {
             socket.onmessage = (event) => {
                 try {
                     const data = JSON.parse(event.data);
-                    // Server might broadcast periodic time updates
+                    console.log('Timer WebSocket message:', data);
+                    
+                    // Handle timer events with comprehensive data
                     if (data.task_id === taskId || !data.task_id) {
-                        const newElapsed = data.elapsed_time || data.seconds;
-                        if (newElapsed !== undefined) {
-                            setTimerState(prev => ({
-                                ...prev,
-                                elapsedSeconds: newElapsed,
-                                startTime: Date.now() // Sync local start point with server update
-                            }));
+                        // Use total_seconds from WebSocket for accurate time
+                        const totalSeconds = data.total_seconds || data.elapsed_time || data.seconds;
+                        
+                        if (totalSeconds !== undefined) {
+                            setTimerState(prev => {
+                                // If timer is running, sync with server time
+                                if (data.running !== undefined && data.running) {
+                                    return {
+                                        ...prev,
+                                        elapsedSeconds: totalSeconds,
+                                        startTime: Date.now(), // Sync local start point with server update
+                                        isRunning: true
+                                    };
+                                } else if (data.running !== undefined && !data.running) {
+                                    // Timer paused/stopped
+                                    return {
+                                        ...prev,
+                                        elapsedSeconds: totalSeconds,
+                                        startTime: null,
+                                        isRunning: false
+                                    };
+                                } else {
+                                    // Just update elapsed time
+                                    return {
+                                        ...prev,
+                                        elapsedSeconds: totalSeconds,
+                                        startTime: Date.now()
+                                    };
+                                }
+                            });
                         }
                     }
                 } catch (err) {
@@ -164,23 +189,26 @@ export const useTaskTimer = (): UseTaskTimerReturn => {
             const totalElapsed = getElapsedTime(taskId);
 
             // Call API to pause timer FIRST
-            await axiosInstance.post(`tasks/${taskId}/timer/pause/`);
-            console.log('Timer paused on backend for task:', taskId);
+            const response = await axiosInstance.post(`tasks/${taskId}/timer/pause/`);
+            console.log('Timer paused on backend for task:', taskId, response.data);
+
+            // Extract total_seconds from response (this is the accurate accumulated time)
+            const totalSeconds = response.data?.total_seconds || totalElapsed;
 
             // Update through WebSocket if open
             if (socketRef.current && socketRef.current.readyState === WebSocket.OPEN) {
                 socketRef.current.send(JSON.stringify({
                     type: 'pause_timer',
                     task_id: taskId,
-                    elapsed_time: totalElapsed
+                    elapsed_time: totalSeconds
                 }));
             }
 
-            // THEN update local state
+            // THEN update local state with the accurate total from backend
             setTimerState({
                 taskId,
                 startTime: null,
-                elapsedSeconds: totalElapsed,
+                elapsedSeconds: totalSeconds,
                 isRunning: false,
             });
 
@@ -205,14 +233,18 @@ export const useTaskTimer = (): UseTaskTimerReturn => {
             const response = await axiosInstance.post(`tasks/${taskId}/timer/start/`);
             console.log('Timer started successfully on backend:', response.data);
 
+            // Extract total_seconds from response (accumulated time from previous sessions)
+            const totalSeconds = response.data?.total_seconds || 0;
+
             // Connect WebSocket for real-time tracking
             connectWebSocket(taskId);
 
             // Update local state AFTER successful start
+            // Use total_seconds from backend as the base elapsed time
             setTimerState({
                 taskId,
                 startTime: Date.now(),
-                elapsedSeconds: currentElapsed,
+                elapsedSeconds: totalSeconds,
                 isRunning: true,
             });
 

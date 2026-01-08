@@ -9,25 +9,29 @@ import axiosInstance from '../utils/axiosInstance';
 
 interface Project {
 	id: number;
+	project_no: number;
 	project_name: string;
-	project_type: 'internal' | 'external';
-	client: number | null;
+	project_type?: 'internal' | 'external';
+	client?: number | null;
 	client_name?: string;
 	start_date: string;
 	end_date: string;
 	status: string;
-	progress: number;
-	income: number;
-	forecasted_profit: number;
-	budget?: {
-		total_budget: string | number;
+	progress?: number;
+	budget: {
+		use_quoted_amounts: boolean;
+		total_hours: number;
+		total_budget: string;
+		bills_and_expenses: string;
 		currency: string;
+		forecasted_profit: string;
 	};
 }
 
-interface ClientGroup {
+interface CompanyGroup {
 	id: string;
-	name: string;
+	company_name: string;
+	total_projects: number;
 	projects: Project[];
 }
 
@@ -60,18 +64,26 @@ const ProgressBar = ({ value }: { value: number }) => (
 
 const StatusBadge = ({ status }: { status: string }) => {
 	const styles = {
+		'planning': 'bg-purple-50 text-purple-700 border-purple-200',
+		'in_progress': 'bg-green-50 text-green-700 border-green-200',
 		'In Progress': 'bg-green-50 text-green-700 border-green-200',
 		'Completed': 'bg-blue-50 text-blue-700 border-blue-200',
+		'completed': 'bg-blue-50 text-blue-700 border-blue-200',
 		'On Hold': 'bg-orange-50 text-orange-700 border-orange-200',
+		'on_hold': 'bg-orange-50 text-orange-700 border-orange-200',
 		'Cancelled': 'bg-red-50 text-red-700 border-red-200',
+		'cancelled': 'bg-red-50 text-red-700 border-red-200',
 	};
 
 	const defaultStyle = 'bg-gray-50 text-gray-700 border-gray-200';
 	const activeStyle = styles[status as keyof typeof styles] || defaultStyle;
+	
+	// Capitalize first letter for display
+	const displayStatus = status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
 
 	return (
 		<span className={`px-3 py-1 rounded-full text-xs font-medium border ${activeStyle}`}>
-			{status}
+			{displayStatus}
 		</span>
 	);
 };
@@ -79,16 +91,14 @@ const StatusBadge = ({ status }: { status: string }) => {
 export default function ProjectsScreen({ userRole, currentPage, onNavigate }: any) {
 	const navigate = useNavigate();
 	const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
-	const [projects, setProjects] = useState<Project[]>([]);
+	const [companyGroups, setCompanyGroups] = useState<CompanyGroup[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [searchQuery, setSearchQuery] = useState('');
-
-	// Mock data for KPIs (replace with real data if available)
-	const kpis = [
-		{ label: 'Forecasted profit (budget)', value: '5,000 INR', subValue: '50%', icon: TrendingUp },
-		{ label: 'Invoiced (budget)', value: '5,000 INR', icon: Wallet },
-		{ label: 'Income (actual)', value: '5,000 INR', icon: PieChart },
-	];
+	const [kpiData, setKpiData] = useState({
+		forecastedProfit: 0,
+		totalBudget: 0,
+		totalHours: 0
+	});
 
 	useEffect(() => {
 		fetchProjects();
@@ -134,36 +144,29 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 			setProjects(mappedData);
 		} catch (error) {
 			console.error('Error fetching projects:', error);
-			setProjects([]);
+			setCompanyGroups([]);
 		} finally {
 			setLoading(false);
 		}
 	};
 
-	// Filter projects based on search query
-	const filteredProjects = projects.filter(project =>
-		project.project_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-		(project.client_name && project.client_name.toLowerCase().includes(searchQuery.toLowerCase()))
-	);
+	// Filter company groups based on search query
+	const filteredCompanyGroups = companyGroups.map(company => {
+		const filteredProjects = company.projects.filter(project =>
+			project.project_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+			company.company_name.toLowerCase().includes(searchQuery.toLowerCase())
+		);
+		
+		return {
+			...company,
+			projects: filteredProjects
+		};
+	}).filter(company => company.projects.length > 0);
 
-	// Group projects
-	const groupedProjects = filteredProjects.reduce((acc: ClientGroup[], project) => {
-		const groupName = project.project_type === 'internal' ? 'Internal' : (project.client_name || 'Other Clients');
-		const groupId = project.project_type === 'internal' ? 'internal' : `client-${project.client}`;
-
-		const existingGroup = acc.find(g => g.name === groupName);
-
-		if (existingGroup) {
-			existingGroup.projects.push(project);
-		} else {
-			acc.push({
-				id: groupId,
-				name: groupName,
-				projects: [project]
-			});
-		}
-		return acc;
-	}, []);
+	// Calculate currency (use first project's currency or default to INR)
+	const currency = companyGroups.length > 0 && companyGroups[0].projects.length > 0 
+		? companyGroups[0].projects[0].budget.currency 
+		: 'INR';
 
 	return (
 		<Layout userRole={userRole} currentPage="projects" onNavigate={onNavigate}>
@@ -215,9 +218,22 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 
 				{/* KPIs */}
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-					{kpis.map((kpi, index) => (
-						<KPICard key={index} {...kpi} />
-					))}
+					<KPICard 
+						label="Forecasted profit (budget)" 
+						value={`${kpiData.forecastedProfit.toLocaleString()} ${currency}`} 
+						icon={TrendingUp} 
+					/>
+					<KPICard 
+						label="Total Budget" 
+						value={`${kpiData.totalBudget.toLocaleString()} ${currency}`} 
+						icon={Wallet} 
+					/>
+					<KPICard 
+						label="Total Hours Allocated" 
+						value={kpiData.totalHours.toString()} 
+						subValue="hours"
+						icon={PieChart} 
+					/>
 				</div>
 
 				{/* Projects Table */}
@@ -226,55 +242,58 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 						<div className="min-w-[1000px]">
 							{/* Table Header */}
 							<div className="grid grid-cols-12 gap-4 px-6 py-4 border-b border-gray-200 bg-white text-xs font-semibold text-gray-500 uppercase tracking-wider">
-								<div className="col-span-4">Project Name | Client</div>
-								<div className="col-span-2">Due date</div>
-								{/* <div className="col-span-2">Progress</div> */}
-								<div className="col-span-1">Income</div>
+								<div className="col-span-3">Project Name</div>
+								<div className="col-span-2">Start - End Date</div>
+								<div className="col-span-2">Total Budget</div>
 								<div className="col-span-2">Forecasted Profit</div>
-								<div className="col-span-1">Status</div>
+								<div className="col-span-1">Hours</div>
+								<div className="col-span-2">Status</div>
 							</div>
 
 							{/* Table Body */}
 							<div className="divide-y divide-gray-100">
 								{loading ? (
 									<div className="p-8 text-center text-gray-500">Loading projects...</div>
-								) : groupedProjects.length === 0 ? (
+								) : filteredCompanyGroups.length === 0 ? (
 									<div className="p-8 text-center text-gray-500">No projects found</div>
 								) : (
-									groupedProjects.map((group) => (
-										<div key={group.id} className="group">
-											{/* Group Header */}
-											<div className="px-6 py-3 bg-white flex items-center justify-between border-b border-gray-100">
-												<span className="text-sm font-medium text-blue-600">{group.name}</span>
-												<span className="text-xs text-gray-500 font-medium">Total {group.projects.length} Project</span>
+									filteredCompanyGroups.map((company) => (
+										<div key={company.id} className="group">
+											{/* Company Header */}
+											<div className="px-6 py-3 bg-blue-50 flex items-center justify-between border-b border-blue-100">
+												<span className="text-sm font-bold text-blue-900">{company.company_name}</span>
+												<span className="text-xs text-blue-700 font-medium">
+													Total {company.projects.length} Project{company.projects.length !== 1 ? 's' : ''}
+												</span>
 											</div>
 
 											{/* Projects */}
 											<div className="divide-y divide-gray-50">
-												{group.projects.map((project) => (
+												{company.projects.map((project) => (
 													<div
 														key={project.id}
-														onClick={() => navigate(`/projects/${project.id}`)}
+														onClick={() => navigate(`/projects/${project.project_no}`)}
 														className="grid grid-cols-12 gap-4 px-6 py-4 items-center hover:bg-gray-50 transition-colors bg-white cursor-pointer"
 													>
-														<div className="col-span-4 flex items-center gap-3">
+														<div className="col-span-3 flex items-center gap-3">
 															<span className="text-sm font-medium text-gray-900">
 																{project.project_name}
 															</span>
 														</div>
-														<div className="col-span-2 text-sm text-gray-900 font-medium">
-															{project.end_date}
+														<div className="col-span-2 text-xs text-gray-600">
+															<div>{project.start_date}</div>
+															<div>{project.end_date}</div>
 														</div>
-														{/* <div className="col-span-2">
-															<ProgressBar value={project.progress} />
-														</div> */}
+														<div className="col-span-2 text-sm text-gray-900 font-medium">
+															{parseFloat(project.budget.total_budget).toLocaleString()} {project.budget.currency}
+														</div>
+														<div className="col-span-2 text-sm text-green-600 font-medium">
+															{parseFloat(project.budget.forecasted_profit).toLocaleString()} {project.budget.currency}
+														</div>
 														<div className="col-span-1 text-sm text-gray-900 font-medium">
-															{project.income ? `${project.income} INR` : 'N/A'}
+															{project.budget.total_hours}h
 														</div>
-														<div className="col-span-2 text-sm text-gray-900 font-medium">
-															{project.forecasted_profit ? `${project.forecasted_profit} INR` : 'N/A'}
-														</div>
-														<div className="col-span-1">
+														<div className="col-span-2">
 															<StatusBadge status={project.status} />
 														</div>
 													</div>
