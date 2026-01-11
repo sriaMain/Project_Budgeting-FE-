@@ -65,6 +65,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
     const [isLoadingQuotation, setIsLoadingQuotation] = useState(false);
     const [payments, setPayments] = useState<any[]>([]);
     const [isLoadingPayments, setIsLoadingPayments] = useState(false);
+    const [paymentSummary, setPaymentSummary] = useState<any>(null);
 
     // Handle tab query parameter
     useEffect(() => {
@@ -118,28 +119,32 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
 
     // Fetch payments for all project invoices
     const fetchProjectPayments = async () => {
-        if (!invoices || invoices.length === 0) {
+        if (!projectId) {
             setPayments([]);
+            setPaymentSummary(null);
             return;
         }
 
         try {
             setIsLoadingPayments(true);
-            // Fetch payments for each invoice
-            const paymentPromises = invoices.map(invoice =>
-                axiosInstance.get(`/invoices/${invoice.id}/payments/`)
-            );
+            // Fetch payments using the project payments list endpoint
+            const response = await axiosInstance.get(`/projects/${projectId}/payments-list/`);
 
-            const responses = await Promise.all(paymentPromises);
-
-            // Combine all payments from all invoices
-            const allPayments = responses.flatMap(response => response.data || []);
-
-            console.log('Project payments:', allPayments);
-            setPayments(allPayments);
+            console.log('Project payments response:', response.data);
+            
+            // Extract payments array and summary data from the response
+            if (response.data) {
+                const { payments, ...summary } = response.data;
+                setPayments(payments || []);
+                setPaymentSummary(summary);
+            } else {
+                setPayments([]);
+                setPaymentSummary(null);
+            }
         } catch (error) {
             console.error('Error fetching payments:', error);
             setPayments([]);
+            setPaymentSummary(null);
         } finally {
             setIsLoadingPayments(false);
         }
@@ -204,12 +209,12 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
         }
     }, [activeTab, projectId, project]);
 
-    // Fetch payments when invoices are loaded
+    // Fetch payments when Payment tab is active
     useEffect(() => {
-        if (invoices.length > 0) {
+        if (activeTab === 'Payment') {
             fetchProjectPayments();
         }
-    }, [invoices]);
+    }, [activeTab, projectId]);
 
     const handleTaskAdded = async (newTask: any) => {
         console.log('Task created for project:', newTask);
@@ -902,56 +907,54 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                         )}
 
                         {activeTab === 'Payment' && (
-                            <div className="space-y-4">
-                                {/* Filter and Search Bar */}
-                                <div className="flex items-center justify-end gap-3">
-                                    <div className="relative">
-                                        <button
-                                            onClick={() => setShowPaymentFilter(!showPaymentFilter)}
-                                            className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm text-gray-700 hover:bg-gray-50 transition-colors"
-                                        >
-                                            <Filter className="w-4 h-4" />
-                                            Filter
-                                        </button>
-
-                                        {/* Filter Dropdown */}
-                                        {showPaymentFilter && (
-                                            <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
-                                                <div className="p-3">
-                                                    <p className="text-xs font-medium text-gray-700 mb-2">Filter by Type</p>
-                                                    {['All', 'Incoming', 'Outgoing'].map((type) => (
-                                                        <button
-                                                            key={type}
-                                                            onClick={() => {
-                                                                setPaymentTypeFilter(type);
-                                                                setShowPaymentFilter(false);
-                                                            }}
-                                                            className={`w-full text-left px-3 py-2 text-sm rounded hover:bg-gray-100 transition-colors ${paymentTypeFilter === type ? 'bg-blue-50 text-blue-600 font-medium' : 'text-gray-700'
-                                                                }`}
-                                                        >
-                                                            {type}
-                                                        </button>
-                                                    ))}
-                                                </div>
-                                            </div>
-                                        )}
+                            <div className="space-y-6">
+                                {/* Payment Summary Cards */}
+                                {!isLoadingPayments && paymentSummary && (
+                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
+                                            <p className="text-xs font-medium text-blue-700 mb-1">Total Invoiced</p>
+                                            <p className="text-2xl font-bold text-blue-900">₹{parseFloat(paymentSummary.total_invoiced || 0).toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
+                                            <p className="text-xs font-medium text-green-700 mb-1">Total Payments</p>
+                                            <p className="text-2xl font-bold text-green-900">₹{parseFloat(paymentSummary.total_payments || 0).toLocaleString('en-IN')}</p>
+                                        </div>
+                                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
+                                            <p className="text-xs font-medium text-purple-700 mb-1">Payment Count</p>
+                                            <p className="text-2xl font-bold text-purple-900">{paymentSummary.payment_count || 0}</p>
+                                        </div>
+                                        <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
+                                            <p className="text-xs font-medium text-orange-700 mb-1">Invoice Count</p>
+                                            <p className="text-2xl font-bold text-orange-900">{paymentSummary.invoice_count || 0}</p>
+                                        </div>
                                     </div>
+                                )}
 
-                                    <div className="relative w-64">
-                                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                                        <input
-                                            type="text"
-                                            placeholder="Search..."
-                                            value={paymentSearch}
-                                            onChange={(e) => setPaymentSearch(e.target.value)}
-                                            className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                                        />
+                                {/* Filter and Search Bar */}
+                                <div className="flex items-center justify-between gap-3">
+                                    <h3 className="text-lg font-semibold text-gray-900">Payment History</h3>
+                                    <div className="flex items-center gap-3">
+                                        <div className="relative w-64">
+                                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                            <input
+                                                type="text"
+                                                placeholder="Search payments..."
+                                                value={paymentSearch}
+                                                onChange={(e) => setPaymentSearch(e.target.value)}
+                                                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                                            />
+                                        </div>
                                     </div>
                                 </div>
 
                                 {/* Payments Table using ReusableTable */}
                                 {isLoadingPayments ? (
-                                    <div className="text-center py-8 text-gray-500">Loading payments...</div>
+                                    <div className="text-center py-12">
+                                        <div className="inline-flex flex-col items-center">
+                                            <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mb-3"></div>
+                                            <p className="text-sm text-gray-500">Loading payments...</p>
+                                        </div>
+                                    </div>
                                 ) : (
                                     <ReusableTable<any>
                                         data={payments.filter(payment => {
@@ -960,22 +963,18 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                             const searchMatch = paymentSearch === '' ||
                                                 payment.invoice_no?.toLowerCase().includes(searchLower) ||
                                                 payment.reference_no?.toLowerCase().includes(searchLower) ||
-                                                payment.payment_method_display?.toLowerCase().includes(searchLower) ||
-                                                payment.payment_date?.toLowerCase().includes(searchLower);
+                                                payment.payment_method?.toLowerCase().includes(searchLower) ||
+                                                payment.notes?.toLowerCase().includes(searchLower) ||
+                                                payment.created_by_name?.toLowerCase().includes(searchLower);
                                             return searchMatch;
                                         })}
                                         columns={[
                                             {
-                                                header: 'DATE',
-                                                accessor: (payment) => new Date(payment.payment_date).toLocaleDateString(),
-                                                className: 'uppercase text-xs'
-                                            },
-                                            {
-                                                header: 'INVOICE',
+                                                header: 'INVOICE NO',
                                                 accessor: (payment) => (
                                                     <span
-                                                        onClick={() => navigate(`/invoices/${payment.invoice}`)}
-                                                        className="text-sm text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                                        onClick={() => navigate(`/invoices/${payment.invoice_id}`)}
+                                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
                                                     >
                                                         {payment.invoice_no}
                                                     </span>
@@ -983,28 +982,67 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                                 className: 'uppercase text-xs'
                                             },
                                             {
+                                                header: 'PAYMENT DATE',
+                                                accessor: (payment) => new Date(payment.payment_date).toLocaleDateString('en-GB', {
+                                                    day: '2-digit',
+                                                    month: 'short',
+                                                    year: 'numeric'
+                                                }),
+                                                className: 'uppercase text-xs'
+                                            },
+                                            {
                                                 header: 'AMOUNT',
-                                                accessor: (payment) => `₹ ${parseFloat(payment.amount).toFixed(2)}`,
+                                                accessor: (payment) => (
+                                                    <span className="font-semibold text-green-700">
+                                                        ₹{parseFloat(payment.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                    </span>
+                                                ),
                                                 className: 'uppercase text-xs'
                                             },
                                             {
                                                 header: 'PAYMENT METHOD',
-                                                accessor: 'payment_method_display',
+                                                accessor: (payment) => (
+                                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
+                                                        {payment.payment_method || '-'}
+                                                    </span>
+                                                ),
                                                 className: 'uppercase text-xs'
                                             },
                                             {
-                                                header: 'REFERENCE',
-                                                accessor: 'reference_no',
+                                                header: 'REFERENCE NO',
+                                                accessor: (payment) => payment.reference_no || '-',
                                                 className: 'uppercase text-xs'
                                             },
                                             {
                                                 header: 'NOTES',
-                                                accessor: (payment) => payment.notes || '-',
+                                                accessor: (payment) => (
+                                                    <span className="text-sm text-gray-600 max-w-xs truncate block" title={payment.notes}>
+                                                        {payment.notes || '-'}
+                                                    </span>
+                                                ),
+                                                className: 'uppercase text-xs'
+                                            },
+                                            {
+                                                header: 'CREATED BY',
+                                                accessor: (payment) => (
+                                                    <div className="flex flex-col">
+                                                        <span className="text-sm font-medium text-gray-900">{payment.created_by_name}</span>
+                                                        <span className="text-xs text-gray-500">
+                                                            {new Date(payment.created_at).toLocaleDateString('en-GB', {
+                                                                day: '2-digit',
+                                                                month: 'short',
+                                                                year: 'numeric',
+                                                                hour: '2-digit',
+                                                                minute: '2-digit'
+                                                            })}
+                                                        </span>
+                                                    </div>
+                                                ),
                                                 className: 'uppercase text-xs'
                                             }
                                         ]}
                                         keyField="id"
-                                        emptyMessage="No payments found"
+                                        emptyMessage="No payments found for this project"
                                     />
                                 )}
                             </div>

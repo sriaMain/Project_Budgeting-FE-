@@ -109,39 +109,55 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 			const response = await axiosInstance.get('projects/');
 
 			// Handle the nested structure: response.data.Projects is an array of companies
-			// Each company has project_details array
-			let allProjects: any[] = [];
-
 			if (response.data && response.data.Projects && Array.isArray(response.data.Projects)) {
-				// Flatten the nested structure
-				response.data.Projects.forEach((company: any) => {
-					if (company.project_details && Array.isArray(company.project_details)) {
-						// Add company_name to each project for grouping
-						const projectsWithCompany = company.project_details.map((p: any) => ({
-							...p,
-							company_name: company.company_name
-						}));
-						allProjects = [...allProjects, ...projectsWithCompany];
-					}
+				let totalProfit = 0;
+				let totalBudget = 0;
+				let totalHours = 0;
+
+				const groups: CompanyGroup[] = response.data.Projects.map((company: any, index: number) => {
+					// Map project_details to Project objects
+					const projects: Project[] = (company.project_details || []).map((p: any) => {
+						// Parse budget values for KPIs
+						const profit = p.budget?.forecasted_profit ? parseFloat(p.budget.forecasted_profit) : 0;
+						const budget = p.budget?.total_budget ? parseFloat(p.budget.total_budget) : 0;
+						const hours = p.budget?.total_hours || 0;
+
+						totalProfit += profit;
+						totalBudget += budget;
+						totalHours += hours;
+
+						return {
+							id: p.project_no, // Use project_no as id
+							project_no: p.project_no,
+							project_name: p.project_name,
+							project_type: 'external', // Default
+							client: null,
+							client_name: company.company_name,
+							start_date: p.start_date,
+							end_date: p.end_date,
+							status: p.status || 'planning',
+							progress: 0, // Default
+							budget: p.budget
+						};
+					});
+
+					return {
+						id: `company-${index}`, // Generate ID for group
+						company_name: company.company_name,
+						total_projects: company.total_projects,
+						projects: projects
+					};
 				});
+
+				setCompanyGroups(groups);
+				setKpiData({
+					forecastedProfit: totalProfit,
+					totalBudget: totalBudget,
+					totalHours: totalHours
+				});
+			} else {
+				setCompanyGroups([]);
 			}
-
-			const mappedData = allProjects.map((p: any) => ({
-				id: p.project_no, // Map project_no to id
-				project_name: p.project_name,
-				project_type: p.project_type || 'external', // Default to external if not specified
-				client: p.client || null,
-				client_name: p.company_name || 'Unknown Client', // Use company_name from API
-				start_date: p.start_date,
-				end_date: p.end_date,
-				status: p.status || 'planning', // Use the status from API
-				progress: p.progress || 0, // Default if missing
-				income: p.budget?.total_budget ? Number(p.budget.total_budget) : 0, // Use budget as proxy or 0
-				forecasted_profit: p.budget?.forecasted_profit ? Number(p.budget.forecasted_profit) : 0, // Parse forecasted_profit
-				budget: p.budget
-			}));
-
-			setProjects(mappedData);
 		} catch (error) {
 			console.error('Error fetching projects:', error);
 			setCompanyGroups([]);
