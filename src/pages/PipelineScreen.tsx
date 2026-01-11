@@ -12,7 +12,7 @@ import { toast } from 'react-hot-toast';
 import { parseApiErrors } from '../utils/parseApiErrors';
 
 interface PipelineScreenProps {
-  userRole?: 'admin' | 'user';
+  userRole?: 'admin' | 'user' | 'manager';
   currentPage?: string;
   onNavigate?: (page: string) => void;
 }

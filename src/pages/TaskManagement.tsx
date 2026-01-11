@@ -138,7 +138,7 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
   const [isLoadingTasks, setIsLoadingTasks] = React.useState(false);
   const [isAddTaskModalOpen, setIsAddTaskModalOpen] = useState(false);
   const [editingTask, setEditingTask] = useState<Task | null>(null);
-  const [editingStatusTaskId, setEditingStatusTaskId] = useState<string | null>(null);
+  const [editingStatusTaskId, setEditingStatusTaskId] = useState<number | null>(null);
   const [projectStats, setProjectStats] = useState({
     totalActiveProjects: 0,
     overdueTasks: 0,
@@ -444,7 +444,7 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
     }
   };
 
-  const updateTaskStatus = async (taskId: string, newStatus: string) => {
+  const updateTaskStatus = async (taskId: number, newStatus: string) => {
     try {
       const response = await axiosInstance.patch(`tasks/${taskId}/`, { status: newStatus });
       if (response.status === 200) {

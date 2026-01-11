@@ -12,7 +12,7 @@ import { toast } from 'react-hot-toast';
 import axiosInstance from '../utils/axiosInstance';
 
 interface InvoiceDetailsScreenProps {
-    userRole?: 'admin' | 'user';
+    userRole?: 'admin' | 'user' | 'manager';
     currentPage?: string;
     onNavigate?: (page: string) => void;
 }

@@ -16,7 +16,7 @@ import axiosInstance from '../utils/axiosInstance';
 import { toast } from 'react-hot-toast';
 
 interface QuoteDetailsPageProps {
-    userRole?: 'admin' | 'user';
+    userRole?: 'admin' | 'user' | 'manager';
     currentPage?: string;
     onNavigate?: (page: string) => void;
 }

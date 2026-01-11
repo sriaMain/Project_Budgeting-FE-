@@ -33,7 +33,7 @@ interface Payment {
 }
 
 interface ProjectDetailsPageProps {
-    userRole: 'admin' | 'user';
+    userRole: 'admin' | 'user' | 'manager';
     currentPage: string;
     onNavigate: (page: string) => void;
 }
