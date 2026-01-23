@@ -80,7 +80,7 @@ export const useTaskTimer = (): UseTaskTimerReturn => {
 
         const token = store.getState().auth.accessToken;
         // Construct WS URL - using the same host as axiosInstance
-        const wsHost = "192.168.0.174:8000";
+        const wsHost = import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/";
         const wsUrl = `ws://${wsHost}/ws/timer/?token=${token}`;
 
         try {

@@ -87,14 +87,23 @@ export default function GenerateInvoicePage() {
                     const rows: ProductRow[] = quoteData.items.map((item: any, index: number) => {
                         // Log each item to see its structure
                         console.log(`Item ${index}:`, item);
+                        console.log(`Item ${index} - Checking IDs:`, {
+                            'item.id': item.id,
+                            'item.item_id': item.item_id,
+                            'item.quote_item_id': item.quote_item_id,
+                            'ALL KEYS': Object.keys(item)
+                        });
+
+                        const quoteItemId = item.id || item.item_id || item.quote_item_id;
+                        console.log(`Item ${index} - Final quote_item_id:`, quoteItemId);
 
                         return {
                             id: `${index + 1}`,
-                            quote_item_id: item.id || item.item_id || item.quote_item_id, // Try multiple possible field names
+                            quote_item_id: quoteItemId,
                             selected: true, // Select all by default
-                            group: item.product_group || 'Service',
-                            product: item.product_name || '',
-                            description: '',
+                            group: item.product_group || 'Services',
+                            product: item.product_name || item.product_service || '',
+                            description: item.description || '',
                             quantity: parseFloat(item.quantity || '1'),
                             unit: item.unit || 'hr',
                             unitPrice: parseFloat(item.price_per_unit || '0'),
@@ -201,17 +210,20 @@ export default function GenerateInvoicePage() {
         try {
             setIsSubmitting(true);
 
-            // Get selected quote item IDs
+            // Get selected quote items with their quantities
             console.log('All product rows:', productRows);
             console.log('Selected rows:', productRows.filter(row => row.selected));
 
-            const selectedItemIds = productRows
+            const invoiceItems = productRows
                 .filter(row => row.selected && row.quote_item_id) // Only selected items with quote_item_id
-                .map(row => row.quote_item_id!);
+                .map(row => ({
+                    quote_item_id: row.quote_item_id!,
+                    quantity: row.quantity
+                }));
 
-            console.log('Selected item IDs:', selectedItemIds);
+            console.log('Invoice items:', invoiceItems);
 
-            // Prepare invoice data matching API request format
+            // Prepare invoice data matching new API request format
             const invoiceData: any = {
                 quote_id: parseInt(quotationId || referenceQuoteNo),
                 due_days: parseInt(dueDays),
@@ -219,15 +231,18 @@ export default function GenerateInvoicePage() {
                 terms_conditions: termsConditions
             };
 
-            // Only add quote_item_ids if we have valid IDs
-            if (selectedItemIds.length > 0) {
-                invoiceData.quote_item_ids = selectedItemIds;
-                console.log('Including selected item IDs:', selectedItemIds);
+            // Add invoice_items if we have valid items
+            if (invoiceItems.length > 0) {
+                invoiceData.invoice_items = invoiceItems;
+                console.log('Including invoice items with quantities:', invoiceItems);
             } else {
-                console.log('No quote_item_ids - backend will use all items from quote');
+                console.log('No invoice_items - backend will use all items from quote with original quantities');
             }
 
             console.log('Creating invoice with data:', invoiceData);
+            console.log('Payload stringified:', JSON.stringify(invoiceData, null, 2));
+            console.log('Does payload have invoice_items?', 'invoice_items' in invoiceData);
+            console.log('invoice_items value:', invoiceData.invoice_items);
 
             // Make API call
             const response = await axiosInstance.post('invoices/generate/', invoiceData);

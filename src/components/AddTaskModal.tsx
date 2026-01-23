@@ -81,7 +81,8 @@ export function AddTaskModal({
         assignee_id: 0,
         project: prefilledProjectId || 0,
         status: '',
-        allocated_hours: '00:00' // Changed to HH:MM format
+        allocated_hours: '00:00', // Changed to HH:MM format
+        due_date: '' // Optional due date
 
     });
 
@@ -139,7 +140,8 @@ export function AddTaskModal({
                 assignee_id: 0,
                 project: prefilledProjectId || 0,
                 status: '',
-                allocated_hours: '00:00'
+                allocated_hours: '00:00',
+                due_date: ''
             });
             setAssigneeSearch('');
             setProjectSearch('');
@@ -158,6 +160,7 @@ export function AddTaskModal({
                     status: editingTask.status || prev.status,
                     project: editingTask.project || prev.project,
                     assignee_id: editingTask.assigned_to?.id || prev.assignee_id || 0,
+                    due_date: editingTask.due_date || prev.due_date,
                 }));
 
                 // Project prefilling is now handled by a separate useEffect 
@@ -347,7 +350,8 @@ export function AddTaskModal({
             // prefer selectedUserId (from service->user selector) over freeform assignee_id
             ...(selectedUserId && { assigned_to: selectedUserId }),
             ...(formData.assignee_id && !selectedUserId && formData.assignee_id !== 0 && { assignee_id: formData.assignee_id }),
-            ...(formData.project && formData.project !== 0 && { project: formData.project })
+            ...(formData.project && formData.project !== 0 && { project: formData.project }),
+            ...(formData.due_date && { due_date: formData.due_date })
         };
 
         console.log('Form submission payload:', payload); // Debug log
@@ -585,6 +589,21 @@ export function AddTaskModal({
                                 {errors.status && (
                                     <p className="text-xs text-red-600 mt-1">{errors.status}</p>
                                 )}
+                            </div>
+
+                            {/* Due Date (Optional) */}
+                            <div className="space-y-2">
+                                <label className="block text-sm font-medium text-gray-700">
+                                    Due Date (Optional)
+                                </label>
+                                <input
+                                    type="date"
+                                    value={formData.due_date}
+                                    onChange={(e) => {
+                                        setFormData({ ...formData, due_date: e.target.value });
+                                    }}
+                                    className="w-full px-3 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm"
+                                />
                             </div>
 
                             {/* Allocated Hours */}

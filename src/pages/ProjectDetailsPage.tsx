@@ -66,6 +66,12 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
     const [payments, setPayments] = useState<any[]>([]);
     const [isLoadingPayments, setIsLoadingPayments] = useState(false);
     const [paymentSummary, setPaymentSummary] = useState<any>(null);
+    const [outgoingPayments, setOutgoingPayments] = useState<any[]>([]);
+    const [purchaseOrders, setPurchaseOrders] = useState<any[]>([]);
+    const [isLoadingPOs, setIsLoadingPOs] = useState(false);
+    const [bills, setBills] = useState<any[]>([]);
+    const [isLoadingBills, setIsLoadingBills] = useState(false);
+    const [billsSummary, setBillsSummary] = useState<any>(null);
 
     // Handle tab query parameter
     useEffect(() => {
@@ -74,6 +80,29 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             setActiveTab(tabParam);
         }
     }, [searchParams]);
+
+    // Helper function to map API task data to component Task interface
+    const mapApiTaskToTask = (task: any): Task => {
+        // Normalize status: capitalize first letter
+        let normalizedStatus = task.status || 'planned';
+        if (normalizedStatus === 'planned') normalizedStatus = 'Planned';
+        else if (normalizedStatus === 'in_progress' || normalizedStatus === 'in progress') normalizedStatus = 'In Progress';
+        else if (normalizedStatus === 'completed') normalizedStatus = 'Completed';
+
+        return {
+            id: task.id?.toString() || '',
+            assignee: task.assigned_to?.username || 'Unassigned',
+            assigneeAvatar: task.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
+            title: task.title || 'Untitled Task',
+            status: normalizedStatus as Task['status'],
+            activityType: task.activity_type || 'Development',
+            allocatedHours: task.allocated_formatted || (task.allocated_hours ? `${task.allocated_hours}h` : '0h'),
+            consumedHours: task.consumed_formatted || (task.consumed_hours ? `${task.consumed_hours}h` : '0h'),
+            dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD',
+            remaining: task.remaining_formatted_hms || (task.remaining_hours ? `${task.remaining_hours}h` : task.allocated_hours ? `${task.allocated_hours}h` : '0h')
+        };
+    };
+
 
     useEffect(() => {
         const fetchProjectDetails = async () => {
@@ -95,7 +124,32 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             }
         };
 
+        const fetchProjectTasks = async () => {
+            if (!projectId) return;
+            setIsLoadingTasks(true);
+            try {
+                // Fetch tasks from api/tasks/{projectId}/tasks/
+                const response = await axiosInstance.get(`/tasks/${projectId}/tasks/`);
+                console.log('Tasks API response:', response.data);
+                
+                // Response is an array, get the first element which contains Tasks
+                if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+                    const projectTasksData = response.data[0];
+                    if (projectTasksData.Tasks && Array.isArray(projectTasksData.Tasks)) {
+                        console.log('Project tasks from API:', projectTasksData.Tasks);
+                        const mappedTasks: Task[] = projectTasksData.Tasks.map(mapApiTaskToTask);
+                        setTasks(mappedTasks);
+                    }
+                }
+            } catch (error) {
+                console.error('Error fetching project tasks:', error);
+            } finally {
+                setIsLoadingTasks(false);
+            }
+        };
+
         fetchProjectDetails();
+        fetchProjectTasks();
         fetchFirstQuote();
     }, [projectId]);
 
@@ -121,6 +175,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
     const fetchProjectPayments = async () => {
         if (!projectId) {
             setPayments([]);
+            setOutgoingPayments([]);
             setPaymentSummary(null);
             return;
         }
@@ -134,16 +189,19 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             
             // Extract payments array and summary data from the response
             if (response.data) {
-                const { payments, ...summary } = response.data;
+                const { payments, outgoing_payments, ...summary } = response.data;
                 setPayments(payments || []);
+                setOutgoingPayments(outgoing_payments || []);
                 setPaymentSummary(summary);
             } else {
                 setPayments([]);
+                setOutgoingPayments([]);
                 setPaymentSummary(null);
             }
         } catch (error) {
             console.error('Error fetching payments:', error);
             setPayments([]);
+            setOutgoingPayments([]);
             setPaymentSummary(null);
         } finally {
             setIsLoadingPayments(false);
@@ -165,39 +223,47 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
         }
     };
 
-    // Fetch tasks for this project
-    useEffect(() => {
-        const fetchProjectTasks = async () => {
-            if (!projectId) return;
-            setIsLoadingTasks(true);
-            try {
-                const response = await axiosInstance.get(`tasks/${projectId}/tasks/`);
-                if (response.status === 200 && response.data) {
-                    // Map API response to Task interface
-                    const mappedTasks: Task[] = response.data.map((task: any) => ({
-                        id: task.id?.toString() || '',
-                        assignee: task.assigned_to?.username || 'Unassigned',
-                        assigneeAvatar: task.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
-                        title: task.title || 'Untitled Task',
-                        status: (task.status || 'Planned') as Task['status'],
-                        activityType: task.activity_type || 'Development',
-                        allocatedHours: task.allocated_hours ? `${task.allocated_hours}h` : '0h',
-                        consumedHours: task.consumed_hours ? `${task.consumed_hours}h` : '0h',
-                        dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD',
-                        remaining: task.remaining_hours ? `${task.remaining_hours}h` : task.allocated_hours ? `${task.allocated_hours}h` : '0h'
-                    }));
-                    setTasks(mappedTasks);
-                }
-            } catch (error) {
-                console.error('Error fetching project tasks:', error);
-                toast.error('Failed to load tasks');
-            } finally {
-                setIsLoadingTasks(false);
-            }
-        };
+    // Fetch purchase orders for the project
+    const fetchPurchaseOrders = async () => {
+        if (!projectId) return;
 
-        fetchProjectTasks();
-    }, [projectId]);
+        try {
+            setIsLoadingPOs(true);
+            const response = await axiosInstance.get(`/projects/${projectId}/purchase-orders/`);
+            if (response.status === 200 && response.data.purchase_orders) {
+                setPurchaseOrders(response.data.purchase_orders);
+                console.log('Fetched purchase orders:', response.data.purchase_orders);
+            }
+        } catch (error) {
+            console.error('Error fetching purchase orders:', error);
+        } finally {
+            setIsLoadingPOs(false);
+        }
+    };
+
+    // Fetch bills (outgoing payments) for the project
+    const fetchBills = async () => {
+        if (!projectId) return;
+
+        try {
+            setIsLoadingBills(true);
+            const response = await axiosInstance.get(`/projects/${projectId}/outgoing-payments/`);
+            if (response.status === 200) {
+                setBills(response.data.payments || []);
+                setBillsSummary({
+                    total_paid: response.data.total_paid,
+                    project_name: response.data.project_name,
+                    project_no: response.data.project_no,
+                    vendor_bills: response.data.debug?.vendor_bills || []
+                });
+                console.log('Fetched bills:', response.data);
+            }
+        } catch (error) {
+            console.error('Error fetching bills:', error);
+        } finally {
+            setIsLoadingBills(false);
+        }
+    };
 
     // Fetch quotation when Finances tab is active
     useEffect(() => {
@@ -206,8 +272,13 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             if (project?.created_from_quotation) {
                 fetchProjectQuotation(project.created_from_quotation);
             }
+            // Fetch purchase orders
+            fetchPurchaseOrders();
+            // Fetch bills (outgoing payments)
+            fetchBills();
         }
     }, [activeTab, projectId, project]);
+
 
     // Fetch payments when Payment tab is active
     useEffect(() => {
@@ -219,23 +290,15 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
     const handleTaskAdded = async (newTask: any) => {
         console.log('Task created for project:', newTask);
 
-        // Refetch tasks after adding
+        // Refetch tasks to get updated list
         try {
-            const response = await axiosInstance.get(`tasks/${projectId}/tasks/`);
-            if (response.status === 200 && response.data) {
-                const mappedTasks: Task[] = response.data.map((task: any) => ({
-                    id: task.id?.toString() || '',
-                    assignee: task.assigned_to?.username || 'Unassigned',
-                    assigneeAvatar: task.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
-                    title: task.title || 'Untitled Task',
-                    status: (task.status || 'Planned') as Task['status'],
-                    activityType: task.activity_type || 'Development',
-                    allocatedHours: task.allocated_hours ? `${task.allocated_hours}h` : '0h',
-                    consumedHours: task.consumed_hours ? `${task.consumed_hours}h` : '0h',
-                    dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD',
-                    remaining: task.remaining_hours ? `${task.remaining_hours}h` : task.allocated_hours ? `${task.allocated_hours}h` : '0h'
-                }));
-                setTasks(mappedTasks);
+            const response = await axiosInstance.get(`/tasks/${projectId}/tasks/`);
+            if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+                const projectTasksData = response.data[0];
+                if (projectTasksData.Tasks && Array.isArray(projectTasksData.Tasks)) {
+                    const mappedTasks: Task[] = projectTasksData.Tasks.map(mapApiTaskToTask);
+                    setTasks(mappedTasks);
+                }
             }
         } catch (error) {
             console.error('Error refetching tasks:', error);
@@ -274,21 +337,13 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
 
         // Refetch tasks to get updated assignee information
         try {
-            const response = await axiosInstance.get(`tasks/${projectId}/tasks/`);
-            if (response.status === 200 && response.data) {
-                const mappedTasks: Task[] = response.data.map((task: any) => ({
-                    id: task.id?.toString() || '',
-                    assignee: task.assigned_to?.username || 'Unassigned',
-                    assigneeAvatar: task.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
-                    title: task.title || 'Untitled Task',
-                    status: (task.status || 'Planned') as Task['status'],
-                    activityType: task.activity_type || 'Development',
-                    allocatedHours: task.allocated_hours ? `${task.allocated_hours}h` : '0h',
-                    consumedHours: task.consumed_hours ? `${task.consumed_hours}h` : '0h',
-                    dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD',
-                    remaining: task.remaining_hours ? `${task.remaining_hours}h` : task.allocated_hours ? `${task.allocated_hours}h` : '0h'
-                }));
-                setTasks(mappedTasks);
+            const response = await axiosInstance.get(`/tasks/${projectId}/tasks/`);
+            if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+                const projectTasksData = response.data[0];
+                if (projectTasksData.Tasks && Array.isArray(projectTasksData.Tasks)) {
+                    const mappedTasks: Task[] = projectTasksData.Tasks.map(mapApiTaskToTask);
+                    setTasks(mappedTasks);
+                }
             }
         } catch (error) {
             console.error('Error refetching tasks:', error);
@@ -820,21 +875,158 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
                                         <h3 className="font-semibold text-blue-600 text-sm">Purchase orders</h3>
-                                        <button className="text-black-800 text-sm font-medium hover:text-blue-700">New Purchase orders</button>
+                                        <button 
+                                            onClick={() => {
+                                                const quotationId = project?.created_from_quotation;
+                                                if (quotationId) {
+                                                    navigate(`/create-purchase-order/${quotationId}`);
+                                                } else {
+                                                    toast.error('No quotation associated with this project.');
+                                                }
+                                            }}
+                                            className="text-black-800 text-sm font-medium hover:text-blue-700"
+                                        >
+                                            New Purchase Order
+                                        </button>
                                     </div>
                                     <div className="px-6 py-4 bg-white">
-                                        <p className="text-gray-500 text-sm">No purchase orders to display</p>
+                                        {isLoadingPOs ? (
+                                            <p className="text-gray-500 text-sm">Loading purchase orders...</p>
+                                        ) : purchaseOrders.length === 0 ? (
+                                            <p className="text-gray-500 text-sm">No purchase orders to display</p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {purchaseOrders.map((po: any) => (
+                                                    <div
+                                                        key={po.po_id}
+                                                        onClick={() => navigate(`/purchase-orders/${po.po_id}`)}
+                                                        className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-gray-100"
+                                                    >
+                                                        <div className="flex-1">
+                                                            <div className="flex items-center gap-3">
+                                                                <span className="font-medium text-gray-900">
+                                                                    {po.po_no}
+                                                                </span>
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                                    po.status === 'confirmed' || po.status === 'completed'
+                                                                        ? 'bg-green-50 text-green-700'
+                                                                        : po.status === 'sent'
+                                                                            ? 'bg-blue-50 text-blue-700'
+                                                                            : 'bg-gray-50 text-gray-700'
+                                                                }`}>
+                                                                    {po.status.charAt(0).toUpperCase() + po.status.slice(1)}
+                                                                </span>
+                                                            </div>
+                                                            <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                                                                <span>Vendor: {po.vendor_name}</span>
+                                                                <span>Amount: ₹{parseFloat(po.total_amount).toLocaleString('en-IN')}</span>
+                                                                <span>Items: {po.items_count}</span>
+                                                                {po.issue_date && (
+                                                                    <span>Date: {new Date(po.issue_date).toLocaleDateString()}</span>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                        <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                        </svg>
+                                                    </div>
+                                                ))}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
                                 {/* Bills Section */}
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
-                                        <h3 className="font-semibold text-blue-600 text-sm">Bills</h3>
-                                        <button className="text-black-800 text-sm font-medium hover:text-blue-700">New Bills</button>
+                                        <div>
+                                            <h3 className="font-semibold text-blue-600 text-sm">Bills</h3>
+                                            {billsSummary && (
+                                                <p className="text-xs text-gray-500 mt-1">
+                                                    Total Paid: ₹{parseFloat(billsSummary.total_paid || 0).toLocaleString('en-IN')}
+                                                </p>
+                                            )}
+                                        </div>
                                     </div>
                                     <div className="px-6 py-4 bg-white">
-                                        <p className="text-gray-500 text-sm">No bills to display</p>
+                                        {isLoadingBills ? (
+                                            <p className="text-gray-500 text-sm">Loading bills...</p>
+                                        ) : bills.length === 0 ? (
+                                            <p className="text-gray-500 text-sm">No bills to display</p>
+                                        ) : (() => {
+                                            // Group bills by bill_no
+                                            const groupedBills = bills.reduce((acc: any, bill: any) => {
+                                                if (!acc[bill.bill_no]) {
+                                                    acc[bill.bill_no] = {
+                                                        bill_no: bill.bill_no,
+                                                        po_no: bill.po_no,
+                                                        vendor: bill.vendor,
+                                                        total_amount: 0,
+                                                        payment_count: 0,
+                                                        latest_payment_date: bill.payment_date,
+                                                        payment_ids: []
+                                                    };
+                                                }
+                                                acc[bill.bill_no].total_amount += parseFloat(bill.amount);
+                                                acc[bill.bill_no].payment_count += 1;
+                                                acc[bill.bill_no].payment_ids.push(bill.id);
+                                                // Keep the latest payment date
+                                                if (new Date(bill.payment_date) > new Date(acc[bill.bill_no].latest_payment_date)) {
+                                                    acc[bill.bill_no].latest_payment_date = bill.payment_date;
+                                                }
+                                                return acc;
+                                            }, {});
+
+                                            const uniqueBills = Object.values(groupedBills);
+
+                                            // Get vendor_bills from billsSummary for bill_id mapping
+                                            const vendorBills = billsSummary?.vendor_bills || [];
+
+                                            return (
+                                                <div className="space-y-2">
+                                                    {uniqueBills.map((bill: any, index: number) => {
+                                                        // Find the corresponding bill_id from vendor_bills
+                                                        const vendorBill = vendorBills.find((vb: any) => vb.bill_no === bill.bill_no);
+                                                        const billId = vendorBill?.bill_id || bill.payment_ids[0];
+
+                                                        return (
+                                                            <div
+                                                                key={index}
+                                                                onClick={() => {
+                                                                    // Use the bill_id from vendor_bills to navigate
+                                                                    navigate(`/bills/${billId}`);
+                                                                }}
+                                                                className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-gray-100"
+                                                            >
+                                                                <div className="flex-1">
+                                                                    <div className="flex items-center gap-3">
+                                                                        <span className="font-medium text-gray-900">
+                                                                            {bill.bill_no}
+                                                                        </span>
+                                                                        <span className="text-xs text-gray-500">
+                                                                            PO: {bill.po_no}
+                                                                        </span>
+                                                                        <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
+                                                                            {bill.payment_count} {bill.payment_count === 1 ? 'Payment' : 'Payments'}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                                                                        <span>Vendor: {bill.vendor}</span>
+                                                                        <span>Total: ₹{bill.total_amount.toLocaleString('en-IN')}</span>
+                                                                        {bill.latest_payment_date && (
+                                                                            <span>Latest: {new Date(bill.latest_payment_date).toLocaleDateString()}</span>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                                </svg>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        })()}
                                     </div>
                                 </div>
 
@@ -910,22 +1102,28 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                             <div className="space-y-6">
                                 {/* Payment Summary Cards */}
                                 {!isLoadingPayments && paymentSummary && (
-                                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
-                                        <div className="bg-gradient-to-br from-blue-50 to-blue-100 rounded-xl p-4 border border-blue-200">
-                                            <p className="text-xs font-medium text-blue-700 mb-1">Total Invoiced</p>
-                                            <p className="text-2xl font-bold text-blue-900">₹{parseFloat(paymentSummary.total_invoiced || 0).toLocaleString('en-IN')}</p>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                                        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                                            <p className="text-xs font-medium text-gray-600 mb-1">Total Invoiced</p>
+                                            <p className="text-2xl font-bold text-gray-900">₹{parseFloat(paymentSummary.total_invoiced || 0).toLocaleString('en-IN')}</p>
+                                            <p className="text-xs text-gray-500 mt-1">{paymentSummary.invoice_count || 0} invoices</p>
                                         </div>
-                                        <div className="bg-gradient-to-br from-green-50 to-green-100 rounded-xl p-4 border border-green-200">
-                                            <p className="text-xs font-medium text-green-700 mb-1">Total Payments</p>
-                                            <p className="text-2xl font-bold text-green-900">₹{parseFloat(paymentSummary.total_payments || 0).toLocaleString('en-IN')}</p>
+                                        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                                            <p className="text-xs font-medium text-gray-600 mb-1">Incoming Payments</p>
+                                            <p className="text-2xl font-bold text-gray-900">₹{parseFloat(paymentSummary.total_payments || 0).toLocaleString('en-IN')}</p>
+                                            <p className="text-xs text-gray-500 mt-1">{paymentSummary.payment_count || 0} payments</p>
                                         </div>
-                                        <div className="bg-gradient-to-br from-purple-50 to-purple-100 rounded-xl p-4 border border-purple-200">
-                                            <p className="text-xs font-medium text-purple-700 mb-1">Payment Count</p>
-                                            <p className="text-2xl font-bold text-purple-900">{paymentSummary.payment_count || 0}</p>
+                                        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                                            <p className="text-xs font-medium text-gray-600 mb-1">Outgoing Payments</p>
+                                            <p className="text-2xl font-bold text-gray-900">₹{parseFloat(paymentSummary.outgoing_total_payments || 0).toLocaleString('en-IN')}</p>
+                                            <p className="text-xs text-gray-500 mt-1">{paymentSummary.outgoing_payment_count || 0} payments</p>
                                         </div>
-                                        <div className="bg-gradient-to-br from-orange-50 to-orange-100 rounded-xl p-4 border border-orange-200">
-                                            <p className="text-xs font-medium text-orange-700 mb-1">Invoice Count</p>
-                                            <p className="text-2xl font-bold text-orange-900">{paymentSummary.invoice_count || 0}</p>
+                                        <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
+                                            <p className="text-xs font-medium text-gray-600 mb-1">Net Balance</p>
+                                            <p className="text-2xl font-bold text-gray-900">
+                                                ₹{(parseFloat(paymentSummary.total_payments || 0) - parseFloat(paymentSummary.outgoing_total_payments || 0)).toLocaleString('en-IN')}
+                                            </p>
+                                            <p className="text-xs text-gray-500 mt-1">Incoming - Outgoing</p>
                                         </div>
                                     </div>
                                 )}
@@ -934,6 +1132,39 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="flex items-center justify-between gap-3">
                                     <h3 className="text-lg font-semibold text-gray-900">Payment History</h3>
                                     <div className="flex items-center gap-3">
+                                        {/* Payment Type Filter */}
+                                        <div className="relative">
+                                            <button
+                                                onClick={() => setShowPaymentFilter(!showPaymentFilter)}
+                                                className="flex items-center gap-2 px-4 py-2 border border-gray-300 rounded-lg text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
+                                            >
+                                                <Filter className="w-4 h-4" />
+                                                {paymentTypeFilter}
+                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                                                </svg>
+                                            </button>
+                                            {showPaymentFilter && (
+                                                <div className="absolute right-0 mt-2 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
+                                                    {['All', 'Incoming', 'Outgoing'].map((type) => (
+                                                        <button
+                                                            key={type}
+                                                            onClick={() => {
+                                                                setPaymentTypeFilter(type);
+                                                                setShowPaymentFilter(false);
+                                                            }}
+                                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
+                                                                paymentTypeFilter === type ? 'bg-gray-100 font-medium' : ''
+                                                            }`}
+                                                        >
+                                                            {type}
+                                                        </button>
+                                                    ))}
+                                                </div>
+                                            )}
+                                        </div>
+
+                                        {/* Search */}
                                         <div className="relative w-64">
                                             <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                                             <input
@@ -947,7 +1178,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                     </div>
                                 </div>
 
-                                {/* Payments Table using ReusableTable */}
+                                {/* Unified Payments Table */}
                                 {isLoadingPayments ? (
                                     <div className="text-center py-12">
                                         <div className="inline-flex flex-col items-center">
@@ -955,96 +1186,139 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                             <p className="text-sm text-gray-500">Loading payments...</p>
                                         </div>
                                     </div>
-                                ) : (
-                                    <ReusableTable<any>
-                                        data={payments.filter(payment => {
-                                            // Search filter
-                                            const searchLower = paymentSearch.toLowerCase();
-                                            const searchMatch = paymentSearch === '' ||
-                                                payment.invoice_no?.toLowerCase().includes(searchLower) ||
-                                                payment.reference_no?.toLowerCase().includes(searchLower) ||
-                                                payment.payment_method?.toLowerCase().includes(searchLower) ||
-                                                payment.notes?.toLowerCase().includes(searchLower) ||
-                                                payment.created_by_name?.toLowerCase().includes(searchLower);
-                                            return searchMatch;
-                                        })}
-                                        columns={[
-                                            {
-                                                header: 'INVOICE NO',
-                                                accessor: (payment) => (
-                                                    <span
-                                                        onClick={() => navigate(`/invoices/${payment.invoice_id}`)}
-                                                        className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-                                                    >
-                                                        {payment.invoice_no}
-                                                    </span>
-                                                ),
-                                                className: 'uppercase text-xs'
-                                            },
-                                            {
-                                                header: 'PAYMENT DATE',
-                                                accessor: (payment) => new Date(payment.payment_date).toLocaleDateString('en-GB', {
-                                                    day: '2-digit',
-                                                    month: 'short',
-                                                    year: 'numeric'
-                                                }),
-                                                className: 'uppercase text-xs'
-                                            },
-                                            {
-                                                header: 'AMOUNT',
-                                                accessor: (payment) => (
-                                                    <span className="font-semibold text-green-700">
-                                                        ₹{parseFloat(payment.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
-                                                    </span>
-                                                ),
-                                                className: 'uppercase text-xs'
-                                            },
-                                            {
-                                                header: 'PAYMENT METHOD',
-                                                accessor: (payment) => (
-                                                    <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-blue-50 text-blue-700">
-                                                        {payment.payment_method || '-'}
-                                                    </span>
-                                                ),
-                                                className: 'uppercase text-xs'
-                                            },
-                                            {
-                                                header: 'REFERENCE NO',
-                                                accessor: (payment) => payment.reference_no || '-',
-                                                className: 'uppercase text-xs'
-                                            },
-                                            {
-                                                header: 'NOTES',
-                                                accessor: (payment) => (
-                                                    <span className="text-sm text-gray-600 max-w-xs truncate block" title={payment.notes}>
-                                                        {payment.notes || '-'}
-                                                    </span>
-                                                ),
-                                                className: 'uppercase text-xs'
-                                            },
-                                            {
-                                                header: 'CREATED BY',
-                                                accessor: (payment) => (
-                                                    <div className="flex flex-col">
-                                                        <span className="text-sm font-medium text-gray-900">{payment.created_by_name}</span>
+                                ) : (() => {
+                                    // Combine and filter payments
+                                    const allPayments = [
+                                        ...payments.map(p => ({ ...p, type: 'Incoming' })),
+                                        ...outgoingPayments.map(p => ({ ...p, type: 'Outgoing' }))
+                                    ];
+
+                                    const filteredPayments = allPayments.filter(payment => {
+                                        // Type filter
+                                        if (paymentTypeFilter !== 'All' && payment.type !== paymentTypeFilter) {
+                                            return false;
+                                        }
+
+                                        // Search filter
+                                        const searchLower = paymentSearch.toLowerCase();
+                                        const searchMatch = paymentSearch === '' ||
+                                            payment.invoice_no?.toLowerCase().includes(searchLower) ||
+                                            payment.bill_no?.toLowerCase().includes(searchLower) ||
+                                            payment.po_no?.toLowerCase().includes(searchLower) ||
+                                            payment.vendor?.toLowerCase().includes(searchLower) ||
+                                            payment.reference_no?.toLowerCase().includes(searchLower) ||
+                                            payment.payment_method?.toLowerCase().includes(searchLower) ||
+                                            payment.created_by_name?.toLowerCase().includes(searchLower);
+                                        
+                                        return searchMatch;
+                                    });
+
+                                    return (
+                                        <ReusableTable<any>
+                                            data={filteredPayments}
+                                            columns={[
+                                                {
+                                                    header: 'TYPE',
+                                                    accessor: (payment) => (
+                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
+                                                            payment.type === 'Incoming' 
+                                                                ? 'bg-gray-100 text-gray-700' 
+                                                                : 'bg-gray-100 text-gray-700'
+                                                        }`}>
+                                                            {payment.type}
+                                                        </span>
+                                                    ),
+                                                    className: 'uppercase text-xs'
+                                                },
+                                                {
+                                                    header: 'REFERENCE',
+                                                    accessor: (payment) => (
+                                                        payment.type === 'Incoming' ? (
+                                                            <span
+                                                                onClick={() => navigate(`/invoices/${payment.invoice_id}`)}
+                                                                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                                            >
+                                                                {payment.invoice_no}
+                                                            </span>
+                                                        ) : (
+                                                            <div className="flex flex-col gap-1">
+                                                                <span
+                                                                    onClick={() => navigate(`/bills/${payment.bill_id}`)}
+                                                                    className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                                                >
+                                                                    {payment.bill_no}
+                                                                </span>
+                                                                <span
+                                                                    onClick={() => navigate(`/purchase-orders/${payment.po_id}`)}
+                                                                    className="text-xs text-gray-500 hover:text-blue-600 hover:underline cursor-pointer"
+                                                                >
+                                                                    PO: {payment.po_no}
+                                                                </span>
+                                                            </div>
+                                                        )
+                                                    ),
+                                                    className: 'uppercase text-xs'
+                                                },
+                                                {
+                                                    header: 'PARTY',
+                                                    accessor: (payment) => (
+                                                        <span className="text-sm text-gray-900">
+                                                            {payment.type === 'Incoming' ? payment.created_by_name : payment.vendor}
+                                                        </span>
+                                                    ),
+                                                    className: 'uppercase text-xs'
+                                                },
+                                                {
+                                                    header: 'PAYMENT DATE',
+                                                    accessor: (payment) => new Date(payment.payment_date).toLocaleDateString('en-GB', {
+                                                        day: '2-digit',
+                                                        month: 'short',
+                                                        year: 'numeric'
+                                                    }),
+                                                    className: 'uppercase text-xs'
+                                                },
+                                                {
+                                                    header: 'AMOUNT',
+                                                    accessor: (payment) => (
+                                                        <span className="font-semibold text-gray-900">
+                                                            {payment.type === 'Incoming' ? '+' : '-'}₹{parseFloat(payment.amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                                                        </span>
+                                                    ),
+                                                    className: 'uppercase text-xs'
+                                                },
+                                                {
+                                                    header: 'PAYMENT METHOD',
+                                                    accessor: (payment) => (
+                                                        <span className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                                                            {payment.payment_method || '-'}
+                                                        </span>
+                                                    ),
+                                                    className: 'uppercase text-xs'
+                                                },
+                                                {
+                                                    header: 'REFERENCE NO',
+                                                    accessor: (payment) => payment.reference_no || '-',
+                                                    className: 'uppercase text-xs'
+                                                },
+                                                {
+                                                    header: 'CREATED',
+                                                    accessor: (payment) => (
                                                         <span className="text-xs text-gray-500">
                                                             {new Date(payment.created_at).toLocaleDateString('en-GB', {
                                                                 day: '2-digit',
                                                                 month: 'short',
-                                                                year: 'numeric',
-                                                                hour: '2-digit',
-                                                                minute: '2-digit'
+                                                                year: 'numeric'
                                                             })}
                                                         </span>
-                                                    </div>
-                                                ),
-                                                className: 'uppercase text-xs'
-                                            }
-                                        ]}
-                                        keyField="id"
-                                        emptyMessage="No payments found for this project"
-                                    />
-                                )}
+                                                    ),
+                                                    className: 'uppercase text-xs'
+                                                }
+                                            ]}
+                                            keyField="id"
+                                            emptyMessage="No payments found for this project"
+                                        />
+                                    );
+                                })()}
                             </div>
                         )}
                     </div>
@@ -1078,21 +1352,13 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                         } else {
                             // fallback to refetch if no data returned
                             try {
-                                const response = await axiosInstance.get(`tasks/${projectId}/tasks/`);
-                                if (response.status === 200 && response.data) {
-                                    const mappedTasks: Task[] = response.data.map((task: any) => ({
-                                        id: task.id?.toString() || '',
-                                        assignee: task.assigned_to?.username || 'Unassigned',
-                                        assigneeAvatar: task.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
-                                        title: task.title || 'Untitled Task',
-                                        status: (task.status || 'Planned') as Task['status'],
-                                        activityType: task.activity_type || 'Development',
-                                        allocatedHours: task.allocated_hours ? `${task.allocated_hours}h` : '0h',
-                                        consumedHours: task.consumed_hours ? `${task.consumed_hours}h` : '0h',
-                                        dueDate: task.due_date ? new Date(task.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : 'TBD',
-                                        remaining: task.remaining_hours ? `${task.remaining_hours}h` : task.allocated_hours ? `${task.allocated_hours}h` : '0h'
-                                    }));
-                                    setTasks(mappedTasks);
+                                const response = await axiosInstance.get(`/tasks/${projectId}/tasks/`);
+                                if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+                                    const projectTasksData = response.data[0];
+                                    if (projectTasksData.Tasks && Array.isArray(projectTasksData.Tasks)) {
+                                        const mappedTasks: Task[] = projectTasksData.Tasks.map(mapApiTaskToTask);
+                                        setTasks(mappedTasks);
+                                    }
                                 }
                             } catch (error) {
                                 console.error('Error refetching tasks after update:', error);

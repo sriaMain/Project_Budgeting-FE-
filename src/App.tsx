@@ -19,6 +19,9 @@ import AddQuotePage from "./pages/AddQuotePage";
 import ProfilePage from "./pages/ProfilePage";
 import InvoiceDetailsScreen from "./pages/InvoiceDetailsScreen";
 import GenerateInvoicePage from "./pages/GenerateInvoicePage";
+import CreatePurchaseOrderPage from "./pages/CreatePurchaseOrderPage";
+import PurchaseOrderDetailsPage from "./pages/PurchaseOrderDetailsPage";
+import BillDetailsPage from "./pages/BillDetailsPage";
 import { initializeAuth } from "./auth/authThunk";
 import { useAppSelector } from "./hooks/useAppSelector";
 
@@ -214,6 +217,50 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <InvoiceDetailsScreen
+                  userRole={userRole}
+                  currentPage={currentPage}
+                  onNavigate={handleNavigate}
+                />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Create Purchase Order Page */}
+          <Route
+            path="/create-purchase-order/:quotationId"
+            element={
+              <ProtectedRoute>
+                <CreatePurchaseOrderPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Purchase Order Details Page */}
+          <Route
+            path="/purchase-orders/:poId"
+            element={
+              <ProtectedRoute>
+                <PurchaseOrderDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Purchase Order Details Page */}
+          <Route
+            path="/purchase-orders/:poId"
+            element={
+              <ProtectedRoute>
+                <PurchaseOrderDetailsPage />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Bill Details Page */}
+          <Route
+            path="/bills/:billId"
+            element={
+              <ProtectedRoute>
+                <BillDetailsPage
                   userRole={userRole}
                   currentPage={currentPage}
                   onNavigate={handleNavigate}

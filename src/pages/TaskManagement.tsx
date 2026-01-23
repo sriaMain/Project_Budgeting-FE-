@@ -226,7 +226,10 @@ export const TaskManagement: React.FC<TaskManagementProps> = ({ userRole, curren
   React.useEffect(() => {
     if (!accessToken) return;
 
-    const wsUrl = `ws://192.168.0.174:8000/ws/timer/?token=${accessToken}`;
+       const wsHost = import.meta.env.VITE_API_BASE_URL || "https://project-budgeting-be.onrender.com/api/";
+        const wsUrl = `ws://${wsHost}/ws/timer/?token=${accessToken}`;
+
+
     const websocket = new WebSocket(wsUrl);
 
     websocket.onopen = () => {

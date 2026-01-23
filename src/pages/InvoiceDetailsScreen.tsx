@@ -151,13 +151,8 @@ export default function InvoiceDetailsScreen({
     };
 
     const handleBack = () => {
-        // Navigate to the project's Finances tab
-        if (invoiceData?.project) {
-            navigate(`/projects/${invoiceData.project}?tab=Finances`);
-        } else {
-            // Fallback to browser history if no project info
-            navigate(-1);
-        }
+        // Navigate to pipeline page (main invoices/finances section)
+        navigate('/pipeline');
     };
 
     const handleDelete = async () => {
@@ -171,12 +166,8 @@ export default function InvoiceDetailsScreen({
             await axiosInstance.delete(`/invoices/${invoiceId}/`);
             toast.success('Invoice deleted successfully');
 
-            // Navigate to the project's Finances tab
-            if (invoiceData?.project) {
-                navigate(`/projects/${invoiceData.project}?tab=Finances`);
-            } else {
-                navigate(-1);
-            }
+            // Navigate to pipeline page
+            navigate('/pipeline');
         } catch (error) {
             console.error('Error deleting invoice:', error);
             toast.error('Failed to delete invoice');
