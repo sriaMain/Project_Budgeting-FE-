@@ -4,7 +4,7 @@ import { Navbar } from './Navbar';
 
 interface LayoutProps {
   children: React.ReactNode;
-  userRole: 'admin' | 'user' | 'manager';
+  userRole: 'admin' | 'user' | 'manager' | 'employee';
   currentPage: string;
   onNavigate: (page: string) => void;
 }

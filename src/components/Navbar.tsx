@@ -6,7 +6,7 @@ import { Toast } from './Toast';
 
 
 interface NavbarProps {
-  userRole: 'admin' | 'user' | 'manager';
+  userRole: 'admin' | 'user' | 'manager' | 'employee';
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ userRole }) => {
