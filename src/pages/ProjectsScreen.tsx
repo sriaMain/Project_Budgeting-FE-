@@ -77,7 +77,7 @@ const StatusBadge = ({ status }: { status: string }) => {
 
 	const defaultStyle = 'bg-gray-50 text-gray-700 border-gray-200';
 	const activeStyle = styles[status as keyof typeof styles] || defaultStyle;
-	
+
 	// Capitalize first letter for display
 	const displayStatus = status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ');
 
@@ -172,7 +172,7 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 			project.project_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
 			company.company_name.toLowerCase().includes(searchQuery.toLowerCase())
 		);
-		
+
 		return {
 			...company,
 			projects: filteredProjects
@@ -180,8 +180,8 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 	}).filter(company => company.projects.length > 0);
 
 	// Calculate currency (use first project's currency or default to INR)
-	const currency = companyGroups.length > 0 && companyGroups[0].projects.length > 0 
-		? companyGroups[0].projects[0].budget.currency 
+	const currency = companyGroups.length > 0 && companyGroups[0].projects.length > 0
+		? companyGroups[0].projects[0].budget.currency
 		: 'INR';
 
 	return (
@@ -234,21 +234,21 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 
 				{/* KPIs */}
 				<div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
-					<KPICard 
-						label="Forecasted profit (budget)" 
-						value={`${kpiData.forecastedProfit.toLocaleString()} ${currency}`} 
-						icon={TrendingUp} 
+					<KPICard
+						label="Forecasted profit (budget)"
+						value={`${kpiData.forecastedProfit.toLocaleString()} ${currency}`}
+						icon={TrendingUp}
 					/>
-					<KPICard 
-						label="Total Budget" 
-						value={`${kpiData.totalBudget.toLocaleString()} ${currency}`} 
-						icon={Wallet} 
+					<KPICard
+						label="Total Budget"
+						value={`${kpiData.totalBudget.toLocaleString()} ${currency}`}
+						icon={Wallet}
 					/>
-					<KPICard 
-						label="Total Hours Allocated" 
-						value={kpiData.totalHours.toString()} 
+					<KPICard
+						label="Total Hours Allocated"
+						value={kpiData.totalHours.toString()}
 						subValue="hours"
-						icon={PieChart} 
+						icon={PieChart}
 					/>
 				</div>
 
@@ -330,6 +330,7 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 					setIsCreateModalOpen(false);
 					fetchProjects(); // Refresh list after creation
 				}}
+				hideBudgetTab={true}
 			/>
 		</Layout>
 	);

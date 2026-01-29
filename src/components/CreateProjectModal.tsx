@@ -17,6 +17,7 @@ interface CreateProjectModalProps {
     quoteName?: string;
     clientName?: string;
     authorName?: string;
+    hideBudgetTab?: boolean; // Hide budget tab when creating from admin projects page
 }
 
 type TabType = 'project' | 'budget';
@@ -27,11 +28,13 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
     quoteId,
     quoteName = '',
     clientName = '',
-    authorName = ''
+    authorName = '',
+    hideBudgetTab = false
 }) => {
     const navigate = useNavigate();
     const [activeTab, setActiveTab] = useState<TabType>('project');
-    const [projectType, setProjectType] = useState<'internal' | 'external'>('external');
+    // Default to 'internal' when hideBudgetTab is true (admin project creation), otherwise 'external'
+    const [projectType, setProjectType] = useState<'internal' | 'external'>(hideBudgetTab ? 'internal' : 'external');
     const [budgetMethod, setBudgetMethod] = useState<'quoted' | 'manual'>('quoted');
     const [isSaving, setIsSaving] = useState(false);
 
@@ -68,26 +71,9 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
             return;
         }
 
+
         setIsSaving(true);
         try {
-            // First, automatically toggle the quote to Confirmed status
-            if (quoteId) {
-                try {
-                    console.log(`Updating quote ${quoteId} status to Confirmed...`);
-                    await axiosInstance.put(`/quotes/${quoteId}/`, {
-                        status: 'Confirmed'
-                    });
-                    console.log('Quote status updated to Confirmed successfully');
-                    toast.success('Quote status updated to Confirmed');
-                } catch (error: any) {
-                    console.error('Error updating quote status:', error);
-                    const errorMsg = error.response?.data?.message || 'Failed to update quote status to Confirmed';
-                    toast.error(errorMsg);
-                    setIsSaving(false);
-                    return; // Stop if we can't confirm the quote
-                }
-            }
-
             const payload: any = {
                 project_name: projectName,
                 project_type: projectType,
@@ -203,18 +189,20 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                     <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
                                 )}
                             </button>
-                            <button
-                                onClick={() => setActiveTab('budget')}
-                                className={`px-6 py-3 font-semibold text-sm transition-colors relative ${activeTab === 'budget'
-                                    ? 'text-gray-900 bg-gray-100'
-                                    : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
-                                    }`}
-                            >
-                                Budget Settings
-                                {activeTab === 'budget' && (
-                                    <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
-                                )}
-                            </button>
+                            {!hideBudgetTab && (
+                                <button
+                                    onClick={() => setActiveTab('budget')}
+                                    className={`px-6 py-3 font-semibold text-sm transition-colors relative ${activeTab === 'budget'
+                                        ? 'text-gray-900 bg-gray-100'
+                                        : 'text-gray-600 hover:text-gray-900 hover:bg-gray-50'
+                                        }`}
+                                >
+                                    Budget Settings
+                                    {activeTab === 'budget' && (
+                                        <div className="absolute bottom-0 left-0 right-0 h-0.5 bg-blue-600"></div>
+                                    )}
+                                </button>
+                            )}
                         </div>
                     </div>
 
@@ -287,26 +275,39 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                     <label className="block text-base font-medium text-gray-900 mb-3">
                                         Project type
                                     </label>
-                                    <div className="flex gap-3">
-                                        <button
-                                            onClick={() => setProjectType('internal')}
-                                            className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors ${projectType === 'internal'
-                                                ? 'bg-gray-200 text-gray-900'
-                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            Internal
-                                        </button>
-                                        <button
-                                            onClick={() => setProjectType('external')}
-                                            className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors ${projectType === 'external'
-                                                ? 'bg-gray-200 text-gray-900'
-                                                : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
-                                                }`}
-                                        >
-                                            External
-                                        </button>
-                                    </div>
+                                    {hideBudgetTab ? (
+                                        // Show both buttons but disable External when creating from admin page
+                                        <div className="flex gap-3">
+                                            <div className="flex-1 py-2.5 px-4 rounded-lg font-medium bg-gray-200 text-gray-900">
+                                                Internal
+                                            </div>
+                                            <div className="flex-1 py-2.5 px-4 rounded-lg font-medium bg-gray-100 text-gray-400 cursor-not-allowed">
+                                                External
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        // Allow selection when creating from quote
+                                        <div className="flex gap-3">
+                                            <button
+                                                onClick={() => setProjectType('internal')}
+                                                className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors ${projectType === 'internal'
+                                                    ? 'bg-gray-200 text-gray-900'
+                                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                Internal
+                                            </button>
+                                            <button
+                                                onClick={() => setProjectType('external')}
+                                                className={`flex-1 py-2.5 px-4 rounded-lg font-medium transition-colors ${projectType === 'external'
+                                                    ? 'bg-gray-200 text-gray-900'
+                                                    : 'bg-white border border-gray-300 text-gray-700 hover:bg-gray-50'
+                                                    }`}
+                                            >
+                                                External
+                                            </button>
+                                        </div>
+                                    )}
                                 </div>
 
                                 {/* Project Setup */}
@@ -315,20 +316,22 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
                                         Project Setup
                                     </label>
                                     <div className="space-y-4">
-                                        {/* Client Dropdown */}
-                                        <div>
-                                            <label className="block text-sm text-gray-600 mb-1">Client</label>
-                                            <div className="relative">
-                                                <input
-                                                    type="text"
-                                                    value={client}
-                                                    onChange={(e) => setClient(e.target.value)}
-                                                    className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
-                                                    placeholder="Client Name"
-                                                    readOnly={projectType === 'external' && !!clientName}
-                                                />
+                                        {/* Client Dropdown - Hide when creating from admin page */}
+                                        {!hideBudgetTab && (
+                                            <div>
+                                                <label className="block text-sm text-gray-600 mb-1">Client</label>
+                                                <div className="relative">
+                                                    <input
+                                                        type="text"
+                                                        value={client}
+                                                        onChange={(e) => setClient(e.target.value)}
+                                                        className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-lg text-gray-900 focus:outline-none focus:ring-2 focus:ring-blue-600"
+                                                        placeholder="Client Name"
+                                                        readOnly={projectType === 'external' && !!clientName}
+                                                    />
+                                                </div>
                                             </div>
-                                        </div>
+                                        )}
 
                                         {/* Dates */}
                                         <div className="grid grid-cols-2 gap-4">

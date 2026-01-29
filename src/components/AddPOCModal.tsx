@@ -67,9 +67,8 @@ export function AddPOCModal({ companyId, companyName, poc, onSave, onClose }: Ad
                 return '';
             case 'poc_mobile':
                 if (!value) return 'Phone number is required';
-                const phoneRegex = /^[0-9+\-\s()]*$/;
-                if (!phoneRegex.test(value)) return 'Please enter a valid phone number';
-                if (value.replace(/[^0-9]/g, '').length < 10) return 'Phone number must be at least 10 digits';
+                const digitsOnly = value.replace(/[^0-9]/g, '');
+                if (digitsOnly.length !== 10) return 'Phone number must be exactly 10 digits';
                 return '';
             case 'poc_name':
                 if (!value.trim()) return 'POC name is required';
@@ -85,10 +84,13 @@ export function AddPOCModal({ companyId, companyName, poc, onSave, onClose }: Ad
     const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         const { name, value } = e.target;
 
-        // For phone number, only allow numbers and common phone characters
+        // For phone number, only allow exactly 10 digits
         if (name === 'poc_mobile') {
-            const phoneValue = value.replace(/[^0-9+\-\s()]/g, '');
-            setFormData({ ...formData, [name]: phoneValue });
+            const digitsOnly = value.replace(/[^0-9]/g, '');
+            // Restrict to maximum 10 digits
+            if (digitsOnly.length <= 10) {
+                setFormData({ ...formData, [name]: digitsOnly });
+            }
         } else {
             setFormData({ ...formData, [name]: value });
         }
@@ -305,9 +307,11 @@ export function AddPOCModal({ companyId, companyName, poc, onSave, onClose }: Ad
                                     value={formData.poc_mobile}
                                     onChange={handleChange}
                                     onBlur={handleBlur}
+                                    maxLength={10}
+                                    pattern="[0-9]{10}"
                                     className={`w-full px-3 py-2.5 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all text-sm ${touched.poc_mobile && errors.poc_mobile ? 'border-red-500 bg-red-50' : 'border-gray-300'
                                         }`}
-                                    placeholder="Enter phone number"
+                                    placeholder="Enter 10-digit phone number"
                                 />
                                 {touched.poc_mobile && errors.poc_mobile && (
                                     <p className="text-xs text-red-600 mt-1">{errors.poc_mobile}</p>

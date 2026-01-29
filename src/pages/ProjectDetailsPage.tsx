@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Layout } from '../components/Layout';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { Plus, Calendar, Search, Filter } from 'lucide-react';
@@ -72,6 +72,10 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
     const [bills, setBills] = useState<any[]>([]);
     const [isLoadingBills, setIsLoadingBills] = useState(false);
     const [billsSummary, setBillsSummary] = useState<any>(null);
+    const [attachments, setAttachments] = useState<any[]>([]);
+    const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
+    const [isUploading, setIsUploading] = useState(false);
+    const fileInputRef = useRef<HTMLInputElement>(null);
 
     // Handle tab query parameter
     useEffect(() => {
@@ -112,6 +116,21 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                 const projectData = response.data;
                 setProject(projectData);
 
+                // Log contacts data for debugging
+                console.log('Project data from API:', projectData);
+                if (projectData.contacts && Array.isArray(projectData.contacts)) {
+                    console.log('Project contacts from API:', projectData.contacts);
+                }
+
+                // Log budget data for debugging
+                console.log('Budget fields:', {
+                    budget: projectData.budget,
+                    total_budget: projectData.total_budget,
+                    project_budget: projectData.project_budget,
+                    allocated_budget: projectData.allocated_budget,
+                    budgets: projectData.budgets
+                });
+
                 // Extract invoices from project data
                 if (projectData.invoices && Array.isArray(projectData.invoices)) {
                     console.log('Project invoices from API:', projectData.invoices);
@@ -131,7 +150,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                 // Fetch tasks from api/tasks/{projectId}/tasks/
                 const response = await axiosInstance.get(`/tasks/${projectId}/tasks/`);
                 console.log('Tasks API response:', response.data);
-                
+
                 // Response is an array, get the first element which contains Tasks
                 if (response.data && Array.isArray(response.data) && response.data.length > 0) {
                     const projectTasksData = response.data[0];
@@ -151,6 +170,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
         fetchProjectDetails();
         fetchProjectTasks();
         fetchFirstQuote();
+        fetchAttachments();
     }, [projectId]);
 
     // Fetch first available quote for invoice generation
@@ -186,7 +206,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             const response = await axiosInstance.get(`/projects/${projectId}/payments-list/`);
 
             console.log('Project payments response:', response.data);
-            
+
             // Extract payments array and summary data from the response
             if (response.data) {
                 const { payments, outgoing_payments, ...summary } = response.data;
@@ -264,6 +284,90 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             setIsLoadingBills(false);
         }
     };
+
+    // Fetch attachments for the project
+    const fetchAttachments = async () => {
+        if (!projectId) return;
+
+        try {
+            setIsLoadingAttachments(true);
+            const response = await axiosInstance.get(`/projects/${projectId}/attachments/`);
+            setAttachments(response.data || []);
+            console.log('Fetched attachments:', response.data);
+        } catch (error) {
+            console.error('Error fetching attachments:', error);
+            toast.error('Failed to load attachments');
+        } finally {
+            setIsLoadingAttachments(false);
+        }
+    };
+
+    // Handle file selection and upload
+    const handleFileSelect = async (event: React.ChangeEvent<HTMLInputElement>) => {
+        const file = event.target.files?.[0];
+        if (!file || !projectId) return;
+
+        setIsUploading(true);
+        const formData = new FormData();
+        formData.append('file', file);
+        formData.append('category', 'other'); // Default category
+
+        try {
+            await axiosInstance.post(`/projects/${projectId}/attachments/`, formData, {
+                headers: { 'Content-Type': 'multipart/form-data' }
+            });
+            toast.success('File uploaded successfully');
+            fetchAttachments();
+        } catch (error) {
+            console.error('Error uploading file:', error);
+            toast.error('Failed to upload file');
+        } finally {
+            setIsUploading(false);
+            if (fileInputRef.current) {
+                fileInputRef.current.value = '';
+            }
+        }
+    };
+
+    // Handle file download
+    const handleFileDownload = async (attachment: any) => {
+        try {
+            const response = await axiosInstance.get(`/attachments/${attachment.id}/download/`, {
+                responseType: 'blob'
+            });
+
+            const url = window.URL.createObjectURL(new Blob([response.data]));
+            const link = document.createElement('a');
+            link.href = url;
+            link.setAttribute('download', attachment.file_name);
+            document.body.appendChild(link);
+            link.click();
+            link.remove();
+        } catch (error) {
+            console.error('Error downloading file:', error);
+            toast.error('Failed to download file');
+        }
+    };
+
+    // Get file icon based on file type
+    const getFileIcon = (fileType: string) => {
+        if (fileType.includes('pdf')) return '📄';
+        if (fileType.includes('image')) return '🖼️';
+        if (fileType.includes('spreadsheet') || fileType.includes('excel')) return '📊';
+        if (fileType.includes('word') || fileType.includes('document')) return '📝';
+        if (fileType.includes('zip') || fileType.includes('compressed')) return '📦';
+        return '📎';
+    };
+
+    // Format file size
+    const formatFileSize = (bytes: number) => {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+    };
+
 
     // Fetch quotation when Finances tab is active
     useEffect(() => {
@@ -875,7 +979,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
                                         <h3 className="font-semibold text-blue-600 text-sm">Purchase orders</h3>
-                                        <button 
+                                        <button
                                             onClick={() => {
                                                 const quotationId = project?.created_from_quotation;
                                                 if (quotationId) {
@@ -907,13 +1011,12 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                                                 <span className="font-medium text-gray-900">
                                                                     {po.po_no}
                                                                 </span>
-                                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                                    po.status === 'confirmed' || po.status === 'completed'
-                                                                        ? 'bg-green-50 text-green-700'
-                                                                        : po.status === 'sent'
-                                                                            ? 'bg-blue-50 text-blue-700'
-                                                                            : 'bg-gray-50 text-gray-700'
-                                                                }`}>
+                                                                <span className={`px-2 py-1 rounded-full text-xs font-medium ${po.status === 'confirmed' || po.status === 'completed'
+                                                                    ? 'bg-green-50 text-green-700'
+                                                                    : po.status === 'sent'
+                                                                        ? 'bg-blue-50 text-blue-700'
+                                                                        : 'bg-gray-50 text-gray-700'
+                                                                    }`}>
                                                                     {po.status.charAt(0).toUpperCase() + po.status.slice(1)}
                                                                 </span>
                                                             </div>
@@ -1054,7 +1157,114 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                             <button className="text-blue-600 text-sm font-medium hover:text-blue-700">Modify</button>
                                         </div>
                                         <div className="px-6 py-6 bg-white">
-                                            <p className="text-gray-500 text-sm">No project info  to display</p>
+                                            {project ? (
+                                                <div className="space-y-4">
+                                                    {/* Project Name */}
+                                                    {project.project_name && (
+                                                        <div>
+                                                            <label className="text-xs font-medium text-gray-500 uppercase">Project Name</label>
+                                                            <p className="text-sm text-gray-900 mt-1">{project.project_name}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Company Name */}
+                                                    {project.company_name && (
+                                                        <div>
+                                                            <label className="text-xs font-medium text-gray-500 uppercase">Company</label>
+                                                            <p className="text-sm text-gray-900 mt-1">{project.company_name}</p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Status */}
+                                                    {project.status && (
+                                                        <div>
+                                                            <label className="text-xs font-medium text-gray-500 uppercase">Status</label>
+                                                            <div className="mt-1">
+                                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${project.status === 'Active' || project.status === 'active'
+                                                                    ? 'bg-green-50 text-green-700'
+                                                                    : project.status === 'Completed' || project.status === 'completed'
+                                                                        ? 'bg-blue-50 text-blue-700'
+                                                                        : 'bg-gray-50 text-gray-700'
+                                                                    }`}>
+                                                                    {project.status}
+                                                                </span>
+                                                            </div>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Budget */}
+                                                    <div>
+                                                        <label className="text-xs font-medium text-gray-500 uppercase">Budget</label>
+                                                        <p className="text-sm text-gray-900 mt-1">
+                                                            ₹{(() => {
+                                                                // Handle nested budget object structure as per user's API response
+                                                                const val = project.budget?.total_budget ||
+                                                                    project.budget ||
+                                                                    project.total_budget ||
+                                                                    project.project_budget ||
+                                                                    project.cost ||
+                                                                    project.value ||
+                                                                    '0';
+                                                                const num = parseFloat(String(val).replace(/[^0-9.-]+/g, ""));
+                                                                return (isNaN(num) ? 0 : num).toLocaleString('en-IN', {
+                                                                    minimumFractionDigits: 2,
+                                                                    maximumFractionDigits: 2
+                                                                });
+                                                            })()}
+                                                        </p>
+                                                    </div>
+
+                                                    {/* Start Date */}
+                                                    {project.start_date && (
+                                                        <div>
+                                                            <label className="text-xs font-medium text-gray-500 uppercase">Start Date</label>
+                                                            <p className="text-sm text-gray-900 mt-1">
+                                                                {new Date(project.start_date).toLocaleDateString('en-GB', {
+                                                                    day: '2-digit',
+                                                                    month: 'short',
+                                                                    year: 'numeric'
+                                                                })}
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* End Date */}
+                                                    {project.end_date && (
+                                                        <div>
+                                                            <label className="text-xs font-medium text-gray-500 uppercase">End Date</label>
+                                                            <p className="text-sm text-gray-900 mt-1">
+                                                                {new Date(project.end_date).toLocaleDateString('en-GB', {
+                                                                    day: '2-digit',
+                                                                    month: 'short',
+                                                                    year: 'numeric'
+                                                                })}
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Created From Quotation */}
+                                                    {project.created_from_quotation && (
+                                                        <div>
+                                                            <label className="text-xs font-medium text-gray-500 uppercase">Created From Quote</label>
+                                                            <p className="text-sm text-blue-600 mt-1 cursor-pointer hover:underline"
+                                                                onClick={() => navigate(`/pipeline/quote/${project.created_from_quotation}`)}
+                                                            >
+                                                                Quote #{project.created_from_quotation}
+                                                            </p>
+                                                        </div>
+                                                    )}
+
+                                                    {/* Description */}
+                                                    {project.description && (
+                                                        <div>
+                                                            <label className="text-xs font-medium text-gray-500 uppercase">Description</label>
+                                                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{project.description}</p>
+                                                        </div>
+                                                    )}
+                                                </div>
+                                            ) : (
+                                                <p className="text-gray-500 text-sm">No project info to display</p>
+                                            )}
                                         </div>
                                     </div>
 
@@ -1062,36 +1272,142 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                     <div className="border border-gray-200 rounded-lg overflow-hidden">
                                         <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
                                             <h3 className="font-semibold text-gray-900 text-sm">Files</h3>
-                                            <button className="text-gray-600 text-sm font-medium hover:text-gray-900 flex items-center gap-1">
-                                                <span>📎</span> Add Files
+                                            <input
+                                                type="file"
+                                                ref={fileInputRef}
+                                                onChange={handleFileSelect}
+                                                className="hidden"
+                                            />
+                                            <button
+                                                onClick={() => fileInputRef.current?.click()}
+                                                disabled={isUploading}
+                                                className="text-blue-600 text-sm font-medium hover:text-blue-700 flex items-center gap-1 disabled:opacity-50 disabled:cursor-not-allowed"
+                                            >
+                                                <span>{isUploading ? '⌛' : '📎'}</span> {isUploading ? 'Uploading...' : 'Add Files'}
                                             </button>
                                         </div>
                                         <div className="px-6 py-6 bg-white">
-                                            <p className="text-gray-500 text-sm">No Files to display</p>
+                                            {isLoadingAttachments ? (
+                                                <p className="text-gray-500 text-sm">Loading files...</p>
+                                            ) : attachments.length > 0 ? (
+                                                <div className="space-y-3">
+                                                    {attachments.map((attachment: any) => (
+                                                        <div
+                                                            key={attachment.id}
+                                                            className="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                                        >
+                                                            <div className="flex items-center gap-3 flex-1">
+                                                                <span className="text-2xl">{getFileIcon(attachment.file_type)}</span>
+                                                                <div className="flex-1 min-w-0">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <p className="text-sm font-medium text-gray-900 truncate">
+                                                                            {attachment.file_name}
+                                                                        </p>
+                                                                        <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${attachment.category === 'contract' ? 'bg-purple-50 text-purple-700' :
+                                                                            attachment.category === 'invoice' ? 'bg-green-50 text-green-700' :
+                                                                                attachment.category === 'report' ? 'bg-blue-50 text-blue-700' :
+                                                                                    attachment.category === 'proposal' ? 'bg-yellow-50 text-yellow-700' :
+                                                                                        'bg-gray-50 text-gray-700'
+                                                                            }`}>
+                                                                            {attachment.category}
+                                                                        </span>
+                                                                    </div>
+                                                                    <div className="flex items-center gap-3 mt-1 text-xs text-gray-500">
+                                                                        <span>{formatFileSize(attachment.file_size)}</span>
+                                                                        <span>•</span>
+                                                                        <span>{attachment.uploaded_by_name}</span>
+                                                                        <span>•</span>
+                                                                        <span>{new Date(attachment.uploaded_at).toLocaleDateString('en-GB', {
+                                                                            day: '2-digit',
+                                                                            month: 'short',
+                                                                            year: 'numeric'
+                                                                        })}</span>
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                            <button
+                                                                onClick={() => handleFileDownload(attachment)}
+                                                                className="ml-3 px-3 py-1.5 text-xs font-medium text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-md transition-colors"
+                                                            >
+                                                                Download
+                                                            </button>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-gray-500 text-sm">No Files to display</p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
 
                                 {/* Right Column */}
                                 <div className="space-y-6">
-                                    {/* Custom Fields Section */}
-                                    <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                        <div className="px-6 py-4 bg-white border-b border-gray-200">
-                                            <h3 className="font-semibold text-blue-600 text-sm">Custom Fields</h3>
-                                        </div>
-                                        <div className="px-6 py-6 bg-gray-50">
-                                            <p className="text-gray-500 text-sm">No custom fields to display</p>
-                                        </div>
-                                    </div>
-
                                     {/* Related Contacts Section */}
                                     <div className="border border-gray-200 rounded-lg overflow-hidden">
                                         <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
                                             <h3 className="font-semibold text-gray-900 text-sm">Related Contacts</h3>
-                                            <button className="text-blue-600 text-sm font-medium hover:text-blue-700">Add</button>
+
                                         </div>
                                         <div className="px-6 py-6 bg-white">
-                                            <p className="text-gray-500 text-sm">No Contacts to display</p>
+                                            {project?.contacts && project.contacts.length > 0 ? (
+                                                <div className="space-y-3">
+                                                    {project.contacts.map((contact: any) => (
+                                                        <div
+                                                            key={contact.id}
+                                                            className="p-4 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
+                                                        >
+                                                            <div className="flex items-start justify-between">
+                                                                <div className="flex-1">
+                                                                    <h4 className="font-semibold text-gray-900 text-sm">
+                                                                        {contact.poc_name}
+                                                                    </h4>
+                                                                    {contact.designation && (
+                                                                        <p className="text-xs text-gray-600 mt-1">
+                                                                            {contact.designation}
+                                                                        </p>
+                                                                    )}
+                                                                    {contact.company_name && (
+                                                                        <p className="text-xs text-gray-500 mt-1">
+                                                                            {contact.company_name}
+                                                                        </p>
+                                                                    )}
+                                                                    <div className="mt-2 space-y-1">
+                                                                        {contact.poc_email && (
+                                                                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                                                                                </svg>
+                                                                                <a
+                                                                                    href={`mailto:${contact.poc_email}`}
+                                                                                    className="hover:text-blue-600 hover:underline"
+                                                                                >
+                                                                                    {contact.poc_email}
+                                                                                </a>
+                                                                            </div>
+                                                                        )}
+                                                                        {contact.poc_mobile && (
+                                                                            <div className="flex items-center gap-2 text-xs text-gray-600">
+                                                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
+                                                                                </svg>
+                                                                                <a
+                                                                                    href={`tel:${contact.poc_mobile}`}
+                                                                                    className="hover:text-blue-600 hover:underline"
+                                                                                >
+                                                                                    {contact.poc_mobile}
+                                                                                </a>
+                                                                            </div>
+                                                                        )}
+                                                                    </div>
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ))}
+                                                </div>
+                                            ) : (
+                                                <p className="text-gray-500 text-sm">No Contacts to display</p>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -1153,9 +1469,8 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                                                 setPaymentTypeFilter(type);
                                                                 setShowPaymentFilter(false);
                                                             }}
-                                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${
-                                                                paymentTypeFilter === type ? 'bg-gray-100 font-medium' : ''
-                                                            }`}
+                                                            className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${paymentTypeFilter === type ? 'bg-gray-100 font-medium' : ''
+                                                                }`}
                                                         >
                                                             {type}
                                                         </button>
@@ -1209,7 +1524,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                             payment.reference_no?.toLowerCase().includes(searchLower) ||
                                             payment.payment_method?.toLowerCase().includes(searchLower) ||
                                             payment.created_by_name?.toLowerCase().includes(searchLower);
-                                        
+
                                         return searchMatch;
                                     });
 
@@ -1220,11 +1535,10 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                                 {
                                                     header: 'TYPE',
                                                     accessor: (payment) => (
-                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${
-                                                            payment.type === 'Incoming' 
-                                                                ? 'bg-gray-100 text-gray-700' 
-                                                                : 'bg-gray-100 text-gray-700'
-                                                        }`}>
+                                                        <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${payment.type === 'Incoming'
+                                                            ? 'bg-gray-100 text-gray-700'
+                                                            : 'bg-gray-100 text-gray-700'
+                                                            }`}>
                                                             {payment.type}
                                                         </span>
                                                     ),

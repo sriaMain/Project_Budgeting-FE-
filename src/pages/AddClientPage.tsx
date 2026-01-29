@@ -19,7 +19,7 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
   const [loadingTags, setLoadingTags] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<{ general?: string }>({});
-  
+
   const [formData, setFormData] = useState({
     company_name: client?.company_name || '',
     mobile_number: client?.mobile_number || '',
@@ -39,14 +39,14 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
     const fetchTags = async () => {
       try {
 
-        const res= await axiosInstance.get("/company-tags/");
-        if(res.status===200){
-          setTags (res.data);
+        const res = await axiosInstance.get("/company-tags/");
+        if (res.status === 200) {
+          setTags(res.data);
         }
-  
+
         // Simulate API call
-      
-    
+
+
       } catch (err) {
         console.error("Failed to fetch tags", err);
       } finally {
@@ -59,14 +59,24 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
   }, []);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData({ ...formData, [e.target.name]: e.target.value });
+    const { name, value } = e.target;
+
+    // For mobile number, only allow exactly 10 digits
+    if (name === 'mobile_number') {
+      const digitsOnly = value.replace(/[^0-9]/g, '');
+      if (digitsOnly.length <= 10) {
+        setFormData({ ...formData, [name]: digitsOnly });
+      }
+    } else {
+      setFormData({ ...formData, [name]: value });
+    }
     setErrors({});
   };
 
   const handleTagToggle = (tagId: number) => {
     setFormData(prev => ({
       ...prev,
-      selectedTags: prev.selectedTags.includes(tagId) 
+      selectedTags: prev.selectedTags.includes(tagId)
         ? prev.selectedTags.filter(id => id !== tagId)
         : [...prev.selectedTags, tagId]
     }));
@@ -78,26 +88,26 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
     setIsSaving(true);
 
     const payload = {
-  ...formData,
+      ...formData,
       // send only tag IDs to the API
       tags: formData.selectedTags,
     };
 
     try {
 
-        const response = client 
-          ? await axiosInstance.put(`/client/${client.id}/`, payload)
-          : await axiosInstance.post("/client/", payload);
-        if (response.status === 201 || response.status === 200) {
-          console.log("Client saved:", response.data);
-        }
- 
+      const response = client
+        ? await axiosInstance.put(`/client/${client.id}/`, payload)
+        : await axiosInstance.post("/client/", payload);
+      if (response.status === 201 || response.status === 200) {
+        console.log("Client saved:", response.data);
+      }
+
       const savedClient: Client = {
         ...response.data,
         // for UI, convert tag ids back to tag objects
         tags: tags.filter(t => formData.selectedTags.includes(t.id))
       };
-      
+
       onSave(savedClient);
     } catch (error) {
       const apiErrors = parseApiErrors(error);
@@ -109,17 +119,17 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
 
   return (
     <div className="animate-fade-in-down">
-       {/* Breadcrumb Navigation */}
-       <div className="mb-6 flex items-center gap-2 text-sm">
-         <button
-           onClick={() => { setErrors({}); onCancel(); }}
-           className="text-blue-600 hover:text-blue-800 font-semibold transition-colors"
-         >
-           Contacts
-         </button>
-         <span className="text-gray-400">/</span>
-         <span className="text-gray-700 font-medium">{client ? 'Edit Client' : 'Add New Client'}</span>
-       </div>
+      {/* Breadcrumb Navigation */}
+      <div className="mb-6 flex items-center gap-2 text-sm">
+        <button
+          onClick={() => { setErrors({}); onCancel(); }}
+          className="text-blue-600 hover:text-blue-800 font-semibold transition-colors"
+        >
+          Contacts
+        </button>
+        <span className="text-gray-400">/</span>
+        <span className="text-gray-700 font-medium">{client ? 'Edit Client' : 'Add New Client'}</span>
+      </div>
 
       <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
         <h3 className="text-xl font-bold text-gray-900 mb-8">
@@ -139,13 +149,13 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
           {/* Company Information Section */}
           <div className="space-y-6">
             <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">General Information</h4>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">
                   <span className="text-red-500 mr-1">*</span>Company Name
                 </label>
-                <input 
+                <input
                   required
                   name="company_name"
                   value={formData.company_name}
@@ -154,18 +164,21 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
                   placeholder="Enter company name"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">
                   <span className="text-red-500 mr-1">*</span>Mobile Number
                 </label>
-                <input 
+                <input
                   required
+                  type="tel"
                   name="mobile_number"
                   value={formData.mobile_number}
                   onChange={handleChange}
+                  maxLength={10}
+                  pattern="[0-9]{10}"
                   className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  placeholder="Enter phone number"
+                  placeholder="Enter 10-digit phone number"
                 />
               </div>
 
@@ -173,7 +186,7 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
                 <label className="block text-sm font-semibold text-gray-700">
                   <span className="text-red-500 mr-1">*</span>Email
                 </label>
-                <input 
+                <input
                   required
                   type="email"
                   name="email"
@@ -186,7 +199,7 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
 
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">GSTIN</label>
-                <input 
+                <input
                   name="gstin"
                   value={formData.gstin}
                   onChange={handleChange}
@@ -200,11 +213,11 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
           {/* Address Section */}
           <div className="border-t pt-6 space-y-6">
             <h4 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Address</h4>
-            
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">Street Address</label>
-                <input 
+                <input
                   name="street_address"
                   value={formData.street_address}
                   onChange={handleChange}
@@ -215,7 +228,7 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
 
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">City</label>
-                <input 
+                <input
                   name="city"
                   value={formData.city}
                   onChange={handleChange}
@@ -226,7 +239,7 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
 
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">State</label>
-                <input 
+                <input
                   name="state"
                   value={formData.state}
                   onChange={handleChange}
@@ -237,7 +250,7 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
 
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">Postal Code</label>
-                <input 
+                <input
                   name="postal_code"
                   value={formData.postal_code}
                   onChange={handleChange}
@@ -248,7 +261,7 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
 
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">Municipality</label>
-                <input 
+                <input
                   name="municipality"
                   value={formData.municipality}
                   onChange={handleChange}
@@ -256,10 +269,10 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
                   placeholder="Enter municipality"
                 />
               </div>
-              
+
               <div className="space-y-2">
                 <label className="block text-sm font-semibold text-gray-700">Country</label>
-                <input 
+                <input
                   name="country"
                   value={formData.country}
                   onChange={handleChange}
@@ -281,11 +294,11 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
                 <div className="flex flex-wrap gap-3">
                   {tags.map(tag => (
                     <label key={tag.id} className="flex items-center gap-2 text-sm text-gray-700 cursor-pointer">
-                      <input 
-                        type="checkbox" 
+                      <input
+                        type="checkbox"
                         checked={formData.selectedTags.includes(tag.id)}
                         onChange={() => handleTagToggle(tag.id)}
-                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500" 
+                        className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
                       />
                       {tag.name}
                     </label>
@@ -297,14 +310,14 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
 
           {/* Footer / Save Button */}
           <div className="pt-8 border-t flex justify-center gap-4">
-            <button 
+            <button
               type="button"
               onClick={onCancel}
               className="px-8 py-2.5 rounded-lg border border-gray-300 text-gray-700 font-semibold hover:bg-gray-50 transition-colors"
             >
               Cancel
             </button>
-            <button 
+            <button
               type="submit"
               disabled={isSaving}
               className={`px-8 py-2.5 bg-blue-600 text-white font-semibold rounded-lg hover:bg-blue-700 shadow-md hover:shadow-lg transform active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed ${isSaving ? 'opacity-70' : ''}`}

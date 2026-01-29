@@ -270,6 +270,7 @@ const App: React.FC = () => {
             }
           />
 
+          {/* Reports Page */}
           <Route
             path="/reports"
             element={
