@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Layout } from '../components/Layout';
+import axiosInstance from '../utils/axiosInstance';
 import {
     FileText,
     Download,
@@ -15,14 +16,40 @@ import {
     Filter
 } from 'lucide-react';
 
-// Dummy Data
-const summaryCards = [
-    { label: 'Budget', amount: '$1,250,000', icon: <DollarSign size={20} className="text-blue-600" />, trend: '+12%' },
-    { label: 'Invoiced', amount: '$850,000', icon: <FileText size={20} className="text-indigo-600" />, trend: '+5%' },
-    { label: 'Received', amount: '$720,000', icon: <CheckCircle size={20} className="text-emerald-600" />, trend: '+8%' },
-    { label: 'Expenses', amount: '$420,000', icon: <TrendingUp size={20} className="text-rose-600" />, trend: '-2%' },
-    { label: 'Profit', amount: '$300,000', icon: <PieChart size={20} className="text-amber-600" />, trend: '+15%' },
-];
+// Interface for API Response
+interface MetricData {
+    value: string;
+    change: number;
+}
+
+interface DashboardMetrics {
+    budget: MetricData;
+    invoiced: MetricData;
+    received: MetricData;
+    expenses: MetricData;
+    profit: MetricData;
+}
+
+// Interface for Finance Overview API Response
+interface FinanceSummaryCards {
+    revenue: number;
+    expenses: number;
+    profit: number;
+}
+
+interface FinanceTableRow {
+    total_amount: number;
+    status: string;
+    due_date: string;
+    client__company_name: string;
+}
+
+interface FinanceOverviewResponse {
+    summary_cards: FinanceSummaryCards;
+    table_rows: FinanceTableRow[];
+}
+
+// Dummy Data for tables (will be replaced with API data later)
 
 const financialReports = [
     { id: 1, revenue: '$150,000', expenses: '$45,000', status: 'Paid', history: '2023-10-15', outstanding: '$0' },
@@ -69,11 +96,85 @@ interface ReportsPageProps {
 
 const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavigate }) => {
     const [activeTab, setActiveTab] = useState<TabType>('All');
+    const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
+    const [financeOverview, setFinanceOverview] = useState<FinanceOverviewResponse | null>(null);
+    const [loading, setLoading] = useState(true);
+
+    // Fetch dashboard metrics and finance overview from API
+    useEffect(() => {
+        const fetchData = async () => {
+            try {
+                setLoading(true);
+                // Fetch both APIs in parallel
+                const [metricsResponse, financeResponse] = await Promise.all([
+                    axiosInstance.get('dashboard/metrics/'),
+                    axiosInstance.get('finance/overview/?section=all')
+                ]);
+
+                setMetrics(metricsResponse.data);
+                setFinanceOverview(financeResponse.data);
+            } catch (error) {
+                console.error('Error fetching data:', error);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        fetchData();
+    }, []);
+
+    // Helper function to format currency
+    const formatCurrency = (value: string | number) => {
+        const num = typeof value === 'string' ? parseFloat(value) : value;
+        return new Intl.NumberFormat('en-US', {
+            style: 'currency',
+            currency: 'USD',
+            minimumFractionDigits: 0,
+            maximumFractionDigits: 0,
+        }).format(num);
+    };
+
+    // Helper function to format trend
+    const formatTrend = (change: number) => {
+        if (change === 0) return '0%';
+        return change > 0 ? `+${change}%` : `${change}%`;
+    };
+
+    // Create summary cards from API data
+    const summaryCards = metrics ? [
+        {
+            label: 'Budget',
+            amount: formatCurrency(metrics.budget.value),
+            icon: <DollarSign size={20} className="text-blue-600" />,
+            trend: formatTrend(metrics.budget.change)
+        },
+        {
+            label: 'Invoiced',
+            amount: formatCurrency(metrics.invoiced.value),
+            icon: <FileText size={20} className="text-indigo-600" />,
+            trend: formatTrend(metrics.invoiced.change)
+        },
+        {
+            label: 'Received',
+            amount: formatCurrency(metrics.received.value),
+            icon: <CheckCircle size={20} className="text-emerald-600" />,
+            trend: formatTrend(metrics.received.change)
+        },
+        {
+            label: 'Expenses',
+            amount: formatCurrency(metrics.expenses.value),
+            icon: <TrendingUp size={20} className="text-rose-600" />,
+            trend: formatTrend(metrics.expenses.change)
+        },
+        {
+            label: 'Profit',
+            amount: formatCurrency(metrics.profit.value),
+            icon: <PieChart size={20} className="text-amber-600" />,
+            trend: formatTrend(metrics.profit.change)
+        },
+    ] : [];
 
     const tabs: TabType[] = ['All', 'Financial Reports', 'Project Reports', 'Payment Reports', 'PO & Invoice Reports'];
-
-    // Axios instance (commented as requested)
-    // const api = axios.create({ baseURL: '/api' });
 
     const renderTable = () => {
         switch (activeTab) {
@@ -82,28 +183,27 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 bg-gray-50 z-10">
                             <tr className="border-b border-gray-200">
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Revenue</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Expenses</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Invoice Status</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Receipt History</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Outstanding Amount</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Client Name</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Invoice Amount</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Status</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Due Date</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {financialReports.map((row) => (
-                                <tr key={row.id} className="hover:bg-gray-50 transition-colors group">
-                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.revenue}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{row.expenses}</td>
+                            {financeOverview?.table_rows.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50 transition-colors group">
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.client__company_name}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{formatCurrency(row.total_amount)}</td>
                                     <td className="px-6 py-4 text-sm">
                                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${row.status === 'Paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                                            row.status === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                                                'bg-blue-50 text-blue-700 border border-blue-100'
+                                                row.status === 'Partially Paid' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                                                    row.status === 'Issued' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                                        'bg-rose-50 text-rose-700 border border-rose-100'
                                             }`}>
                                             {row.status}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{row.history}</td>
-                                    <td className="px-6 py-4 text-sm text-rose-600 font-semibold">{row.outstanding}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">{new Date(row.due_date).toLocaleDateString()}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -294,23 +394,39 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
 
                 {/* Financial Summary Section */}
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
-                    {summaryCards.map((card, idx) => (
-                        <div key={idx} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
-                            <div className="flex items-start justify-between">
-                                <div className="p-2 bg-gray-50 rounded-lg group-hover:bg-white transition-colors border border-transparent group-hover:border-gray-100">
-                                    {card.icon}
+                    {loading ? (
+                        // Loading skeleton
+                        Array.from({ length: 5 }).map((_, idx) => (
+                            <div key={idx} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm animate-pulse">
+                                <div className="flex items-start justify-between">
+                                    <div className="w-10 h-10 bg-gray-200 rounded-lg"></div>
+                                    <div className="w-12 h-4 bg-gray-200 rounded"></div>
                                 </div>
-                                <span className={`text-xs font-bold flex items-center gap-0.5 ${card.trend.startsWith('+') ? 'text-emerald-600' : 'text-rose-600'}`}>
-                                    {card.trend.startsWith('+') ? <ArrowUpRight size={12} /> : <ArrowDownRight size={12} />}
-                                    {card.trend}
-                                </span>
+                                <div className="mt-4">
+                                    <div className="w-16 h-4 bg-gray-200 rounded mb-2"></div>
+                                    <div className="w-24 h-8 bg-gray-200 rounded"></div>
+                                </div>
                             </div>
-                            <div className="mt-4">
-                                <p className="text-sm font-medium text-gray-500">{card.label}</p>
-                                <h3 className="text-2xl font-bold text-gray-900 mt-1">{card.amount}</h3>
+                        ))
+                    ) : (
+                        summaryCards.map((card, idx) => (
+                            <div key={idx} className="bg-white p-5 rounded-xl border border-gray-100 shadow-sm hover:shadow-md transition-shadow group">
+                                <div className="flex items-start justify-between">
+                                    <div className="p-2 bg-gray-50 rounded-lg group-hover:bg-white transition-colors border border-transparent group-hover:border-gray-100">
+                                        {card.icon}
+                                    </div>
+                                    <span className={`text-xs font-bold flex items-center gap-0.5 ${card.trend.startsWith('+') ? 'text-emerald-600' : card.trend.startsWith('-') ? 'text-rose-600' : 'text-gray-600'}`}>
+                                        {card.trend.startsWith('+') ? <ArrowUpRight size={12} /> : card.trend.startsWith('-') ? <ArrowDownRight size={12} /> : null}
+                                        {card.trend}
+                                    </span>
+                                </div>
+                                <div className="mt-4">
+                                    <p className="text-sm font-medium text-gray-500">{card.label}</p>
+                                    <h3 className="text-2xl font-bold text-gray-900 mt-1">{card.amount}</h3>
+                                </div>
                             </div>
-                        </div>
-                    ))}
+                        ))
+                    )}
                 </div>
 
                 {/* Reports Tabs Section */}
