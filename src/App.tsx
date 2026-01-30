@@ -22,6 +22,7 @@ import GenerateInvoicePage from "./pages/GenerateInvoicePage";
 import CreatePurchaseOrderPage from "./pages/CreatePurchaseOrderPage";
 import PurchaseOrderDetailsPage from "./pages/PurchaseOrderDetailsPage";
 import BillDetailsPage from "./pages/BillDetailsPage";
+import ExpenseDetailsPage from "./pages/ExpenseDetailsPage";
 import ReportsPage from "./pages/ReportsPage";
 import { initializeAuth } from "./auth/authThunk";
 import { useAppSelector } from "./hooks/useAppSelector";
@@ -262,6 +263,20 @@ const App: React.FC = () => {
             element={
               <ProtectedRoute>
                 <BillDetailsPage
+                  userRole={userRole}
+                  currentPage={currentPage}
+                  onNavigate={handleNavigate}
+                />
+              </ProtectedRoute>
+            }
+          />
+
+          {/* Expense Details Page */}
+          <Route
+            path="/expenses/:expenseId"
+            element={
+              <ProtectedRoute>
+                <ExpenseDetailsPage
                   userRole={userRole}
                   currentPage={currentPage}
                   onNavigate={handleNavigate}

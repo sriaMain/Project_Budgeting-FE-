@@ -6,6 +6,7 @@ import axiosInstance from '../utils/axiosInstance';
 import { ReusableTable } from '../components/ReusableTable';
 import { AddTaskModal } from '../components/AddTaskModal';
 import { AssignTaskModal } from '../components/AssignTaskModal';
+import { AddExpenseModal } from '../components/AddExpenseModal';
 import { toast } from 'react-hot-toast';
 
 
@@ -76,6 +77,9 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
     const [isLoadingAttachments, setIsLoadingAttachments] = useState(false);
     const [isUploading, setIsUploading] = useState(false);
     const fileInputRef = useRef<HTMLInputElement>(null);
+    const [expenses, setExpenses] = useState<any[]>([]);
+    const [isLoadingExpenses, setIsLoadingExpenses] = useState(false);
+    const [isAddExpenseModalOpen, setIsAddExpenseModalOpen] = useState(false);
 
     // Handle tab query parameter
     useEffect(() => {
@@ -207,12 +211,26 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
 
             console.log('Project payments response:', response.data);
 
-            // Extract payments array and summary data from the response
+            // Extract payments from the new API structure
             if (response.data) {
-                const { payments, outgoing_payments, ...summary } = response.data;
-                setPayments(payments || []);
-                setOutgoingPayments(outgoing_payments || []);
-                setPaymentSummary(summary);
+                const { incoming, outgoing, summary } = response.data;
+                
+                // Set incoming payments
+                setPayments(incoming?.payments || []);
+                
+                // Set outgoing payments
+                setOutgoingPayments(outgoing?.payments || []);
+                
+                // Set payment summary
+                setPaymentSummary({
+                    total_invoiced: incoming?.total_received || 0,
+                    invoice_count: incoming?.invoice_count || 0,
+                    total_payments: incoming?.total_received || 0,
+                    payment_count: incoming?.payment_count || 0,
+                    outgoing_total_payments: outgoing?.total_paid || 0,
+                    outgoing_payment_count: (outgoing?.purchase_order_payment_count || 0) + (outgoing?.expense_payment_count || 0),
+                    net_balance: summary?.net_balance || 0
+                });
             } else {
                 setPayments([]);
                 setOutgoingPayments([]);
@@ -269,12 +287,14 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             setIsLoadingBills(true);
             const response = await axiosInstance.get(`/projects/${projectId}/outgoing-payments/`);
             if (response.status === 200) {
-                setBills(response.data.payments || []);
+                // Use vendor_bills from the response
+                setBills(response.data.vendor_bills || []);
                 setBillsSummary({
                     total_paid: response.data.total_paid,
                     project_name: response.data.project_name,
                     project_no: response.data.project_no,
-                    vendor_bills: response.data.debug?.vendor_bills || []
+                    payment_count: response.data.debug?.payment_count || 0,
+                    vendor_bill_count: response.data.debug?.vendor_bill_count || 0
                 });
                 console.log('Fetched bills:', response.data);
             }
@@ -368,6 +388,30 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
         return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
     };
 
+    // Fetch expenses for the project
+    const fetchExpenses = async () => {
+        if (!projectId) return;
+
+        try {
+            setIsLoadingExpenses(true);
+            const response = await axiosInstance.get(`/expenses/?project=${projectId}`);
+            setExpenses(response.data || []);
+            console.log('Fetched expenses:', response.data);
+        } catch (error) {
+            console.error('Error fetching expenses:', error);
+            toast.error('Failed to load expenses');
+        } finally {
+            setIsLoadingExpenses(false);
+        }
+    };
+
+    // Handle expense added
+    const handleExpenseAdded = async () => {
+        console.log('Expense added, refreshing list...');
+        await fetchExpenses();
+    };
+
+
 
     // Fetch quotation when Finances tab is active
     useEffect(() => {
@@ -380,6 +424,8 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             fetchPurchaseOrders();
             // Fetch bills (outgoing payments)
             fetchBills();
+            // Fetch expenses
+            fetchExpenses();
         }
     }, [activeTab, projectId, project]);
 
@@ -1046,7 +1092,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                             <h3 className="font-semibold text-blue-600 text-sm">Bills</h3>
                                             {billsSummary && (
                                                 <p className="text-xs text-gray-500 mt-1">
-                                                    Total Paid: ₹{parseFloat(billsSummary.total_paid || 0).toLocaleString('en-IN')}
+                                                    Total Paid: ₹{parseFloat(billsSummary.total_paid || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                                 </p>
                                             )}
                                         </div>
@@ -1056,80 +1102,71 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                             <p className="text-gray-500 text-sm">Loading bills...</p>
                                         ) : bills.length === 0 ? (
                                             <p className="text-gray-500 text-sm">No bills to display</p>
-                                        ) : (() => {
-                                            // Group bills by bill_no
-                                            const groupedBills = bills.reduce((acc: any, bill: any) => {
-                                                if (!acc[bill.bill_no]) {
-                                                    acc[bill.bill_no] = {
-                                                        bill_no: bill.bill_no,
-                                                        po_no: bill.po_no,
-                                                        vendor: bill.vendor,
-                                                        total_amount: 0,
-                                                        payment_count: 0,
-                                                        latest_payment_date: bill.payment_date,
-                                                        payment_ids: []
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {bills.map((bill: any) => {
+                                                    // Get status badge color
+                                                    const getStatusBadge = (status: string) => {
+                                                        switch (status?.toLowerCase()) {
+                                                            case 'paid':
+                                                                return 'bg-green-100 text-green-800';
+                                                            case 'partially_paid':
+                                                                return 'bg-yellow-100 text-yellow-800';
+                                                            case 'unpaid':
+                                                                return 'bg-red-100 text-red-800';
+                                                            default:
+                                                                return 'bg-gray-100 text-gray-800';
+                                                        }
                                                     };
-                                                }
-                                                acc[bill.bill_no].total_amount += parseFloat(bill.amount);
-                                                acc[bill.bill_no].payment_count += 1;
-                                                acc[bill.bill_no].payment_ids.push(bill.id);
-                                                // Keep the latest payment date
-                                                if (new Date(bill.payment_date) > new Date(acc[bill.bill_no].latest_payment_date)) {
-                                                    acc[bill.bill_no].latest_payment_date = bill.payment_date;
-                                                }
-                                                return acc;
-                                            }, {});
 
-                                            const uniqueBills = Object.values(groupedBills);
+                                                    // Format status text
+                                                    const formatStatus = (status: string) => {
+                                                        return status?.replace('_', ' ').split(' ').map(word => 
+                                                            word.charAt(0).toUpperCase() + word.slice(1)
+                                                        ).join(' ') || 'Unknown';
+                                                    };
 
-                                            // Get vendor_bills from billsSummary for bill_id mapping
-                                            const vendorBills = billsSummary?.vendor_bills || [];
-
-                                            return (
-                                                <div className="space-y-2">
-                                                    {uniqueBills.map((bill: any, index: number) => {
-                                                        // Find the corresponding bill_id from vendor_bills
-                                                        const vendorBill = vendorBills.find((vb: any) => vb.bill_no === bill.bill_no);
-                                                        const billId = vendorBill?.bill_id || bill.payment_ids[0];
-
-                                                        return (
-                                                            <div
-                                                                key={index}
-                                                                onClick={() => {
-                                                                    // Use the bill_id from vendor_bills to navigate
-                                                                    navigate(`/bills/${billId}`);
-                                                                }}
-                                                                className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-gray-100"
-                                                            >
-                                                                <div className="flex-1">
-                                                                    <div className="flex items-center gap-3">
-                                                                        <span className="font-medium text-gray-900">
-                                                                            {bill.bill_no}
-                                                                        </span>
-                                                                        <span className="text-xs text-gray-500">
-                                                                            PO: {bill.po_no}
-                                                                        </span>
+                                                    return (
+                                                        <div
+                                                            key={bill.id}
+                                                            onClick={() => {
+                                                                // Navigate to bill details page using the bill id
+                                                                navigate(`/bills/${bill.id}`);
+                                                            }}
+                                                            className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-gray-100"
+                                                        >
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="font-medium text-gray-900">
+                                                                        {bill.bill_no}
+                                                                    </span>
+                                                                    <span className="text-xs text-gray-500">
+                                                                        PO: {bill.po_no}
+                                                                    </span>
+                                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusBadge(bill.status)}`}>
+                                                                        {formatStatus(bill.status)}
+                                                                    </span>
+                                                                    {bill.payment_count > 0 && (
                                                                         <span className="px-2 py-1 bg-blue-100 text-blue-800 rounded-full text-xs font-medium">
                                                                             {bill.payment_count} {bill.payment_count === 1 ? 'Payment' : 'Payments'}
                                                                         </span>
-                                                                    </div>
-                                                                    <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
-                                                                        <span>Vendor: {bill.vendor}</span>
-                                                                        <span>Total: ₹{bill.total_amount.toLocaleString('en-IN')}</span>
-                                                                        {bill.latest_payment_date && (
-                                                                            <span>Latest: {new Date(bill.latest_payment_date).toLocaleDateString()}</span>
-                                                                        )}
-                                                                    </div>
+                                                                    )}
                                                                 </div>
-                                                                <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                                </svg>
+                                                                <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                                                                    <span>Vendor: {bill.vendor}</span>
+                                                                    <span>Total: ₹{parseFloat(bill.total_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                    <span>Paid: ₹{parseFloat(bill.paid_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                    <span>Balance: ₹{parseFloat(bill.balance_amount).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</span>
+                                                                </div>
                                                             </div>
-                                                        );
-                                                    })}
-                                                </div>
-                                            );
-                                        })()}
+                                                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
 
@@ -1137,10 +1174,71 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
                                         <h3 className="font-semibold text-blue-600 text-sm">Expenses</h3>
-                                        <button className="text-black-800 text-sm font-medium hover:text-blue-700">New Expenses</button>
+                                        <button 
+                                            onClick={() => setIsAddExpenseModalOpen(true)}
+                                            className="text-black-800 text-sm font-medium hover:text-blue-700"
+                                        >
+                                            New Expense
+                                        </button>
                                     </div>
                                     <div className="px-6 py-4 bg-white">
-                                        <p className="text-gray-500 text-sm">No expenses to display</p>
+                                        {isLoadingExpenses ? (
+                                            <p className="text-gray-500 text-sm">Loading expenses...</p>
+                                        ) : expenses.length === 0 ? (
+                                            <p className="text-gray-500 text-sm">No expenses to display</p>
+                                        ) : (
+                                            <div className="space-y-2">
+                                                {expenses.map((expense: any) => {
+                                                    // Get category label from the fetched categories or capitalize the key
+                                                    const categoryLabel = expense.category.charAt(0).toUpperCase() + expense.category.slice(1);
+                                                    
+                                                    return (
+                                                        <div
+                                                            key={expense.id}
+                                                            onClick={() => navigate(`/expenses/${expense.id}`)}
+                                                            className="flex items-center justify-between p-3 hover:bg-gray-50 rounded-lg cursor-pointer transition-colors border border-gray-100"
+                                                        >
+                                                            <div className="flex-1">
+                                                                <div className="flex items-center gap-3">
+                                                                    <span className="font-medium text-gray-900">
+                                                                        {expense.expense_no}
+                                                                    </span>
+                                                                    <span className="text-xs text-gray-500">
+                                                                        {categoryLabel}
+                                                                    </span>
+                                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                                                        expense.is_fully_paid
+                                                                            ? 'bg-green-50 text-green-700'
+                                                                            : expense.total_paid > 0
+                                                                                ? 'bg-yellow-50 text-yellow-700'
+                                                                                : 'bg-red-50 text-red-700'
+                                                                    }`}>
+                                                                        {expense.is_fully_paid 
+                                                                            ? 'Paid' 
+                                                                            : expense.total_paid > 0 
+                                                                                ? 'Partially Paid' 
+                                                                                : 'Unpaid'}
+                                                                    </span>
+                                                                </div>
+                                                                <div className="flex items-center gap-4 mt-1 text-sm text-gray-500">
+                                                                    <span>{expense.description}</span>
+                                                                    <span>Amount: ₹{parseFloat(expense.amount).toLocaleString('en-IN')}</span>
+                                                                    {!expense.is_fully_paid && (
+                                                                        <span>Balance: ₹{parseFloat(expense.balance_amount).toLocaleString('en-IN')}</span>
+                                                                    )}
+                                                                    {expense.expense_date && (
+                                                                        <span>Date: {new Date(expense.expense_date).toLocaleDateString()}</span>
+                                                                    )}
+                                                                </div>
+                                                            </div>
+                                                            <svg className="w-5 h-5 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                            </svg>
+                                                        </div>
+                                                    );
+                                                })}
+                                            </div>
+                                        )}
                                     </div>
                                 </div>
                             </div>
@@ -1421,23 +1519,23 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                                         <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                                             <p className="text-xs font-medium text-gray-600 mb-1">Total Invoiced</p>
-                                            <p className="text-2xl font-bold text-gray-900">₹{parseFloat(paymentSummary.total_invoiced || 0).toLocaleString('en-IN')}</p>
+                                            <p className="text-2xl font-bold text-gray-900">₹{parseFloat(paymentSummary.total_invoiced || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             <p className="text-xs text-gray-500 mt-1">{paymentSummary.invoice_count || 0} invoices</p>
                                         </div>
                                         <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                                             <p className="text-xs font-medium text-gray-600 mb-1">Incoming Payments</p>
-                                            <p className="text-2xl font-bold text-gray-900">₹{parseFloat(paymentSummary.total_payments || 0).toLocaleString('en-IN')}</p>
+                                            <p className="text-2xl font-bold text-green-600">+₹{parseFloat(paymentSummary.total_payments || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             <p className="text-xs text-gray-500 mt-1">{paymentSummary.payment_count || 0} payments</p>
                                         </div>
                                         <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                                             <p className="text-xs font-medium text-gray-600 mb-1">Outgoing Payments</p>
-                                            <p className="text-2xl font-bold text-gray-900">₹{parseFloat(paymentSummary.outgoing_total_payments || 0).toLocaleString('en-IN')}</p>
+                                            <p className="text-2xl font-bold text-red-600">-₹{parseFloat(paymentSummary.outgoing_total_payments || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</p>
                                             <p className="text-xs text-gray-500 mt-1">{paymentSummary.outgoing_payment_count || 0} payments</p>
                                         </div>
                                         <div className="bg-white rounded-xl p-4 border border-gray-200 shadow-sm">
                                             <p className="text-xs font-medium text-gray-600 mb-1">Net Balance</p>
-                                            <p className="text-2xl font-bold text-gray-900">
-                                                ₹{(parseFloat(paymentSummary.total_payments || 0) - parseFloat(paymentSummary.outgoing_total_payments || 0)).toLocaleString('en-IN')}
+                                            <p className="text-2xl font-bold text-blue-600">
+                                                ₹{parseFloat(paymentSummary.net_balance || 0).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                                             </p>
                                             <p className="text-xs text-gray-500 mt-1">Incoming - Outgoing</p>
                                         </div>
@@ -1505,7 +1603,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                     // Combine and filter payments
                                     const allPayments = [
                                         ...payments.map(p => ({ ...p, type: 'Incoming' })),
-                                        ...outgoingPayments.map(p => ({ ...p, type: 'Outgoing' }))
+                                        ...outgoingPayments.map(p => ({ ...p, type: 'Outgoing', payment_type: p.type }))
                                     ];
 
                                     const filteredPayments = allPayments.filter(payment => {
@@ -1520,10 +1618,13 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                             payment.invoice_no?.toLowerCase().includes(searchLower) ||
                                             payment.bill_no?.toLowerCase().includes(searchLower) ||
                                             payment.po_no?.toLowerCase().includes(searchLower) ||
+                                            payment.expense_no?.toLowerCase().includes(searchLower) ||
                                             payment.vendor?.toLowerCase().includes(searchLower) ||
                                             payment.reference_no?.toLowerCase().includes(searchLower) ||
                                             payment.payment_method?.toLowerCase().includes(searchLower) ||
-                                            payment.created_by_name?.toLowerCase().includes(searchLower);
+                                            payment.created_by?.toLowerCase().includes(searchLower) ||
+                                            payment.created_by_name?.toLowerCase().includes(searchLower) ||
+                                            payment.category?.toLowerCase().includes(searchLower);
 
                                         return searchMatch;
                                     });
@@ -1546,40 +1647,72 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                                 },
                                                 {
                                                     header: 'REFERENCE',
-                                                    accessor: (payment) => (
-                                                        payment.type === 'Incoming' ? (
-                                                            <span
-                                                                onClick={() => navigate(`/invoices/${payment.invoice_id}`)}
-                                                                className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
-                                                            >
-                                                                {payment.invoice_no}
-                                                            </span>
-                                                        ) : (
-                                                            <div className="flex flex-col gap-1">
+                                                    accessor: (payment) => {
+                                                        if (payment.type === 'Incoming') {
+                                                            return (
                                                                 <span
-                                                                    onClick={() => navigate(`/bills/${payment.bill_id}`)}
+                                                                    onClick={() => navigate(`/invoices/${payment.invoice_id}`)}
                                                                     className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
                                                                 >
-                                                                    {payment.bill_no}
+                                                                    {payment.invoice_no}
                                                                 </span>
-                                                                <span
-                                                                    onClick={() => navigate(`/purchase-orders/${payment.po_id}`)}
-                                                                    className="text-xs text-gray-500 hover:text-blue-600 hover:underline cursor-pointer"
-                                                                >
-                                                                    PO: {payment.po_no}
-                                                                </span>
-                                                            </div>
-                                                        )
-                                                    ),
+                                                            );
+                                                        } else {
+                                                            // Outgoing payment - check if it's purchase_order or expense
+                                                            if (payment.payment_type === 'purchase_order') {
+                                                                return (
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <span
+                                                                            onClick={() => navigate(`/bills/${payment.id}`)}
+                                                                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                                                        >
+                                                                            {payment.bill_no}
+                                                                        </span>
+                                                                        {payment.po_no && (
+                                                                            <span className="text-xs text-gray-500">
+                                                                                PO: {payment.po_no}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            } else if (payment.payment_type === 'expense') {
+                                                                return (
+                                                                    <div className="flex flex-col gap-1">
+                                                                        <span
+                                                                            onClick={() => navigate(`/expenses/${payment.id}`)}
+                                                                            className="text-sm font-medium text-blue-600 hover:text-blue-800 hover:underline cursor-pointer"
+                                                                        >
+                                                                            {payment.expense_no}
+                                                                        </span>
+                                                                        {payment.category && (
+                                                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800">
+                                                                                {payment.category.charAt(0).toUpperCase() + payment.category.slice(1)}
+                                                                            </span>
+                                                                        )}
+                                                                    </div>
+                                                                );
+                                                            }
+                                                        }
+                                                        return '-';
+                                                    },
                                                     className: 'uppercase text-xs'
                                                 },
                                                 {
                                                     header: 'PARTY',
-                                                    accessor: (payment) => (
-                                                        <span className="text-sm text-gray-900">
-                                                            {payment.type === 'Incoming' ? payment.created_by_name : payment.vendor}
-                                                        </span>
-                                                    ),
+                                                    accessor: (payment) => {
+                                                        let party = '-';
+                                                        if (payment.type === 'Incoming') {
+                                                            party = payment.created_by || payment.created_by_name || '-';
+                                                        } else {
+                                                            // For outgoing, show vendor for PO payments, or category for expenses
+                                                            if (payment.payment_type === 'purchase_order') {
+                                                                party = payment.vendor || '-';
+                                                            } else if (payment.payment_type === 'expense') {
+                                                                party = payment.vendor || 'Internal';
+                                                            }
+                                                        }
+                                                        return <span className="text-sm text-gray-900">{party}</span>;
+                                                    },
                                                     className: 'uppercase text-xs'
                                                 },
                                                 {
@@ -1692,6 +1825,16 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                     }}
                     onAssignmentSuccess={handleAssignmentSuccess}
                     task={selectedTaskForAssignment}
+                />
+            )}
+
+            {/* Add Expense Modal */}
+            {isAddExpenseModalOpen && projectId && (
+                <AddExpenseModal
+                    isOpen={isAddExpenseModalOpen}
+                    onClose={() => setIsAddExpenseModalOpen(false)}
+                    projectId={projectId}
+                    onExpenseAdded={handleExpenseAdded}
                 />
             )}
         </Layout>
