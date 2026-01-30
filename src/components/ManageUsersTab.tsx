@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { 
-  Plus, Search, ArrowLeft, Loader2, User as UserIcon, 
-  ChevronDown, Building2 
+import {
+  Plus, Search, ArrowLeft, Loader2, User as UserIcon,
+  ChevronDown, Building2
 } from 'lucide-react';
 import { ReusableTable } from '../components/ReusableTable';
 import { FormRow } from '../components/FormRow';
@@ -17,7 +17,7 @@ const ManageUsersTab: React.FC = () => {
   const [roles, setRoles] = useState<Role[]>([]);
   const [modules, setModules] = useState<Module[]>([]); // New State for Modules
   const [isLoading, setIsLoading] = useState(true);
-  
+
   // Form State
   // We use a specific state for the form to handle UI logic (like selectedRoleId as a string)
   const initialFormState = {
@@ -41,7 +41,7 @@ const ManageUsersTab: React.FC = () => {
   const [toastMessage, setToastMessage] = useState("");
   const [isNavigating, setIsNavigating] = useState(false);
   const [errors, setErrors] = useState<{ general?: string }>({});
-  
+
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   // --- Fetch Data ---
@@ -69,11 +69,11 @@ const ManageUsersTab: React.FC = () => {
       setRoles(rolesRes.data);
       setUsers(usersRes.data);
       setModules(modulesRes.data);
-      
+
       console.log("Roles fetched:", rolesRes.data);
       console.log("Users fetched:", usersRes.data);
       console.log("Modules fetched:", modulesRes.data);
-      
+
     } catch (error) {
       console.error("Failed to fetch data", error);
     } finally {
@@ -153,7 +153,7 @@ const ManageUsersTab: React.FC = () => {
   const handleSave = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsSaving(true);
-    
+
     try {
       // Create FormData object for multipart/form-data request
       const formDataToSend = new FormData();
@@ -163,7 +163,7 @@ const ManageUsersTab: React.FC = () => {
       formDataToSend.append('last_name', formData.last_name);
       formDataToSend.append('email', formData.email);
       formDataToSend.append('position', formData.position);
-      
+
       // Append Module ID
       // If formData.module is set (contains the ID string), append it.
       if (formData.module) {
@@ -213,7 +213,7 @@ const ManageUsersTab: React.FC = () => {
       }
 
       await fetchData(); // Refresh list
-      
+
       // Show toast and navigate back after delay
       setIsNavigating(true);
       setToastMessage(formData.id ? "User updated successfully!" : "User created successfully!");
@@ -224,7 +224,7 @@ const ManageUsersTab: React.FC = () => {
         setErrors({});
         setIsNavigating(false);
       }, 1800);
-      
+
     } catch (error) {
       const apiErrors = parseApiErrors(error);
       setErrors(apiErrors);
@@ -239,10 +239,10 @@ const ManageUsersTab: React.FC = () => {
       // Create preview URL
       const url = URL.createObjectURL(file);
       // Store both the preview URL and the actual File object
-      setFormData(prev => ({ 
-        ...prev, 
+      setFormData(prev => ({
+        ...prev,
         profile_picture: url,
-        profile_image_file: file 
+        profile_image_file: file
       }));
       setErrors({});
     }
@@ -250,16 +250,16 @@ const ManageUsersTab: React.FC = () => {
 
   // --- Table Configuration ---
   const columns: Column<UserDisplay>[] = [
-    { 
-      header: 'Name', 
+    {
+      header: 'Name',
       accessor: (user) => (
         <div className="flex items-center gap-3">
           <div className="w-10 h-10 rounded-full bg-blue-100 text-blue-600 flex items-center justify-center font-bold text-sm overflow-hidden flex-shrink-0">
             {user.profile_picture ? (
-              <img 
-                src={user.profile_picture} 
-                alt={`${user.first_name} ${user.last_name}`} 
-                className="w-full h-full object-cover" 
+              <img
+                src={user.profile_picture}
+                alt={`${user.first_name} ${user.last_name}`}
+                className="w-full h-full object-cover"
                 onError={(e) => {
                   const target = e.target as HTMLImageElement;
                   target.style.display = 'none';
@@ -275,12 +275,12 @@ const ManageUsersTab: React.FC = () => {
           </div>
           <span className="font-medium text-gray-900">{user.first_name} {user.last_name}</span>
         </div>
-      ) 
+      )
     },
     { header: 'Email', accessor: 'email' },
     { header: 'Position', accessor: 'position' },
-    { 
-      header: 'Role', 
+    {
+      header: 'Role',
       accessor: (user) => {
         // Display Role Name. Assumes GET /users returns nested role objects or we can map them.
         // If the API returns full objects in roles[]:
@@ -288,7 +288,7 @@ const ManageUsersTab: React.FC = () => {
           const firstRole = user.roles[0];
           if (typeof firstRole === 'object' && 'role_name' in firstRole) {
             return firstRole.role_name;
-          } 
+          }
           // If it returns just IDs, we try to find it in our roles list
           else if (typeof firstRole === 'number') {
             const found = roles.find(r => r.id === firstRole);
@@ -298,8 +298,8 @@ const ManageUsersTab: React.FC = () => {
         return <span className="text-gray-400 italic">No Role</span>;
       }
     },
-    { 
-      header: 'Status', 
+    {
+      header: 'Status',
       accessor: (user) => (
         <span className={`px-2 py-1 text-xs rounded-full ${user.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
           {user.is_active ? 'Active' : 'Inactive'}
@@ -311,7 +311,7 @@ const ManageUsersTab: React.FC = () => {
   // --- Render ---
   return (
     <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
-      
+
       {view === 'list' ? (
         <div className="space-y-6">
           {/* Header */}
@@ -319,14 +319,14 @@ const ManageUsersTab: React.FC = () => {
             <h2 className="text-2xl font-bold text-gray-800">Manage Users</h2>
             <div className="flex items-center gap-4 w-full md:w-auto">
               <div className="relative flex-grow md:flex-grow-0">
-                <input 
-                  type="text" 
-                  placeholder="Search users..." 
+                <input
+                  type="text"
+                  placeholder="Search users..."
                   className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full md:w-64"
                 />
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
               </div>
-              <button 
+              <button
                 onClick={() => { setFormData(initialFormState); setErrors({}); setView('form'); }}
                 className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-5 py-2 rounded-lg font-semibold shadow-sm transition-all whitespace-nowrap"
               >
@@ -336,7 +336,7 @@ const ManageUsersTab: React.FC = () => {
           </div>
 
           {/* Table */}
-          <ReusableTable 
+          <ReusableTable
             data={users}
             columns={columns}
             keyField="id"
@@ -352,17 +352,17 @@ const ManageUsersTab: React.FC = () => {
           {isNavigating && (
             <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-10 pointer-events-auto rounded-xl" />
           )}
-          
+
           {/* Form Header */}
           <div className="px-8 py-4 border-b border-gray-100 flex items-center justify-between bg-white">
-             <div className="flex items-center gap-2 text-sm">
-                <span className="font-bold text-gray-900 text-lg">Users and groups</span>
-                <span className="text-gray-400 text-lg">›</span>
-                <span className="text-gray-500">{formData.id ? 'Edit User' : 'New User'}</span>
-             </div>
-             <button onClick={() => { setErrors({}); setView('list'); }} className="text-gray-400 hover:text-gray-600">
-               <ArrowLeft size={20} />
-             </button>
+            <div className="flex items-center gap-2 text-sm">
+              <span className="font-bold text-gray-900 text-lg">Users and groups</span>
+              <span className="text-gray-400 text-lg">›</span>
+              <span className="text-gray-500">{formData.id ? 'Edit User' : 'New User'}</span>
+            </div>
+            <button onClick={() => { setErrors({}); setView('list'); }} className="text-gray-400 hover:text-gray-600">
+              <ArrowLeft size={20} />
+            </button>
           </div>
 
           {errors.general && (
@@ -384,7 +384,7 @@ const ManageUsersTab: React.FC = () => {
               <div className="ml-11 text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
                 SRIA INFOTECH
               </div>
-              
+
               <button className="flex items-center gap-3 px-4 py-3 text-gray-500 hover:bg-gray-50 font-medium rounded-lg transition-colors">
                 <Building2 size={18} />
                 Company data and logo
@@ -395,12 +395,12 @@ const ManageUsersTab: React.FC = () => {
             <div className="flex-1 p-8 bg-white">
               <form onSubmit={handleSave}>
                 <h3 className="text-blue-600 font-bold text-lg mb-6">User details</h3>
-                
+
                 <div className="flex flex-col lg:flex-row gap-8 items-start">
-                  
+
                   {/* Left Column: Input Fields */}
                   <div className="flex-1 w-full space-y-4 max-w-xl">
-                    
+
                     {/* First Name */}
                     <FormRow label="First Name" required>
                       <input
@@ -472,9 +472,10 @@ const ManageUsersTab: React.FC = () => {
                     </FormRow>
 
                     {/* Module Dropdown */}
-                    <FormRow label="Module">
+                    <FormRow label="Module" required>
                       <div className="relative">
                         <select
+                          required
                           value={formData.module}
                           onChange={(e) => { setFormData({ ...formData, module: e.target.value }); setErrors({}); }}
                           className={`w-full px-3 py-2 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-500 outline-none text-sm bg-white cursor-pointer appearance-none ${!formData.module ? 'text-gray-400' : 'text-gray-900'}`}
@@ -493,13 +494,28 @@ const ManageUsersTab: React.FC = () => {
                     </FormRow>
 
                     {/* Charges */}
-                    <FormRow label="Charges per hr">
-                      <input
-                        type="number"
-                        value={formData.charges_per_hour}
-                        onChange={(e) => { setFormData({ ...formData, charges_per_hour: e.target.value }); setErrors({}); }}
-                        className="w-full px-3 py-2 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-500 outline-none text-sm placeholder-gray-300"
-                      />
+                    <FormRow label="Charges per hr" required>
+                      <div className="relative">
+                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 text-sm">₹</span>
+                        <input
+                          required
+                          type="number"
+                          min="0"
+                          max="100000"
+                          step="0.01"
+                          value={formData.charges_per_hour}
+                          onChange={(e) => {
+                            const value = e.target.value;
+                            // Limit to 100 crores (1,00,00,0)
+                            if (value === '' || parseFloat(value) <= 100000) {
+                              setFormData({ ...formData, charges_per_hour: value });
+                            }
+                            setErrors({});
+                          }}
+                          className="w-full pl-7 pr-3 py-2 border border-gray-200 rounded-md focus:ring-1 focus:ring-blue-500 outline-none text-sm placeholder-gray-300"
+                          placeholder="0.00"
+                        />
+                      </div>
                     </FormRow>
 
                     {/* Categories Dropdown (Accordion Placeholder) */}
@@ -548,51 +564,51 @@ const ManageUsersTab: React.FC = () => {
 
                   {/* Right Column: Image Upload */}
                   <div className="w-full lg:w-64 flex flex-col items-center">
-                     <div 
-                        onClick={() => fileInputRef.current?.click()}
-                        className="w-64 h-64 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-all group overflow-hidden"
-                     >
-                        {formData.profile_picture ? (
-                          <div className="relative w-full h-full">
-                            <img src={formData.profile_picture} alt="Preview" className="w-full h-full object-cover" />
-                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <span className="text-white text-sm font-bold">Change Image</span>
-                            </div>
+                    <div
+                      onClick={() => fileInputRef.current?.click()}
+                      className="w-64 h-64 border-2 border-dashed border-gray-300 rounded-lg flex flex-col items-center justify-center cursor-pointer hover:bg-gray-50 hover:border-blue-400 transition-all group overflow-hidden"
+                    >
+                      {formData.profile_picture ? (
+                        <div className="relative w-full h-full">
+                          <img src={formData.profile_picture} alt="Preview" className="w-full h-full object-cover" />
+                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                            <span className="text-white text-sm font-bold">Change Image</span>
                           </div>
-                        ) : (
-                          <>
-                            <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 mb-4">
-                              <UserIcon size={40} />
-                            </div>
-                            <p className="text-xs text-center text-gray-500 font-medium px-4">
-                              Drag a file or <span className="text-blue-600">browse</span> to upload
-                            </p>
-                          </>
-                        )}
-                        <input 
-                          type="file" 
-                          ref={fileInputRef} 
-                          className="hidden" 
-                          accept="image/*"
-                          onChange={handleImageUpload}
-                        />
-                     </div>
+                        </div>
+                      ) : (
+                        <>
+                          <div className="w-20 h-20 bg-gray-200 rounded-full flex items-center justify-center text-gray-400 mb-4">
+                            <UserIcon size={40} />
+                          </div>
+                          <p className="text-xs text-center text-gray-500 font-medium px-4">
+                            Drag a file or <span className="text-blue-600">browse</span> to upload
+                          </p>
+                        </>
+                      )}
+                      <input
+                        type="file"
+                        ref={fileInputRef}
+                        className="hidden"
+                        accept="image/*"
+                        onChange={handleImageUpload}
+                      />
+                    </div>
                   </div>
                 </div>
 
                 {/* Footer Save Button */}
                 <div className="mt-12 flex justify-center pb-8">
-                   <button
+                  <button
                     type="submit"
                     disabled={isSaving}
                     className="px-12 py-2.5 bg-blue-600 text-white font-bold rounded shadow-md hover:bg-blue-700 hover:shadow-lg transition-all disabled:opacity-50"
-                   >
-                     {isSaving ? (
-                       <span className="flex items-center gap-2">
-                         <Loader2 className="animate-spin" size={16} /> Saving...
-                       </span>
-                     ) : 'Save'}
-                   </button>
+                  >
+                    {isSaving ? (
+                      <span className="flex items-center gap-2">
+                        <Loader2 className="animate-spin" size={16} /> Saving...
+                      </span>
+                    ) : 'Save'}
+                  </button>
                 </div>
 
               </form>
@@ -600,7 +616,7 @@ const ManageUsersTab: React.FC = () => {
           </div>
         </div>
       )}
-      
+
       {/* Toast Notification */}
       {showToast && (
         <Toast

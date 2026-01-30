@@ -426,6 +426,7 @@ export default function AddQuotePage() {
         due_date: quoteDetails.dueDate,
         client: selectedClient?.id || null,
         ...(pocId && { poc: pocId }),
+        tax_percentage: taxPercentage,
         items: quoteItems
       };
 

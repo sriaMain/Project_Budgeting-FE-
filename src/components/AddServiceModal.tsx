@@ -26,7 +26,7 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
   const [loadingGroups, setLoadingGroups] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
   const [errors, setErrors] = useState<{ general?: string }>({});
-  
+
   const [formData, setFormData] = useState({
     product_service_name: '',
     description: '',
@@ -49,7 +49,7 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
   const fetchProductGroups = async () => {
     setLoadingGroups(true);
     try {
-      const res = await axiosInstance.get("/product-groups");
+      const res = await axiosInstance.get("/product-groups/");
       if (res.status === 200) {
         setProductGroups(res.data);
       }
@@ -67,7 +67,7 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!formData.product_service_name || !formData.product_group) {
       setErrors({ general: 'Please fill in all required fields' });
       return;
@@ -111,14 +111,14 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
   return (
     <div className="fixed inset-0 z-50 overflow-y-auto">
       {/* Backdrop */}
-      <div 
+      <div
         className="fixed inset-0 bg-black/20 backdrop-blur-sm transition-all"
         onClick={handleClose}
       />
-      
+
       {/* Modal */}
       <div className="flex min-h-full items-center justify-center p-4">
-        <div 
+        <div
           className="relative bg-white rounded-xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-y-auto transform transition-all"
           onClick={(e) => e.stopPropagation()}
         >
@@ -151,7 +151,7 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
                 <label className="block text-sm font-medium text-gray-700">
                   <span className="text-red-500 mr-1">*</span>Service/Product Name
                 </label>
-                <input 
+                <input
                   required
                   name="product_service_name"
                   value={formData.product_service_name}
@@ -189,7 +189,7 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
               {/* Description */}
               <div className="space-y-2">
                 <label className="block text-sm font-medium text-gray-700">Description</label>
-                <textarea 
+                <textarea
                   name="description"
                   value={formData.description}
                   onChange={handleChange}
@@ -201,7 +201,7 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
 
               {/* Footer */}
               <div className="flex justify-end gap-3 pt-4 border-t">
-                <button 
+                <button
                   type="button"
                   onClick={handleClose}
                   disabled={isSaving}
@@ -209,7 +209,7 @@ export function AddServiceModal({ isOpen, onClose, onServiceAdded }: AddServiceM
                 >
                   Cancel
                 </button>
-                <button 
+                <button
                   type="submit"
                   disabled={isSaving}
                   className="px-6 py-2 bg-blue-600 text-white font-medium rounded-lg hover:bg-blue-700 shadow-md hover:shadow-lg transform active:scale-95 transition-all disabled:opacity-50 disabled:cursor-not-allowed"

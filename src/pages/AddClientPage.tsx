@@ -67,7 +67,15 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
       if (digitsOnly.length <= 10) {
         setFormData({ ...formData, [name]: digitsOnly });
       }
-    } else {
+    }
+    // For GSTIN, only allow alphanumeric characters and limit to 15 characters
+    else if (name === 'gstin') {
+      const alphanumericOnly = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      if (alphanumericOnly.length <= 15) {
+        setFormData({ ...formData, [name]: alphanumericOnly });
+      }
+    }
+    else {
       setFormData({ ...formData, [name]: value });
     }
     setErrors({});
@@ -198,13 +206,20 @@ export function AddClientPage({ client, onSave, onCancel }: AddClientProps) {
               </div>
 
               <div className="space-y-2">
-                <label className="block text-sm font-semibold text-gray-700">GSTIN</label>
+                <label className="block text-sm font-semibold text-gray-700">
+                  <span className="text-red-500 mr-1">*</span>GSTIN
+                </label>
                 <input
+                  required
                   name="gstin"
                   value={formData.gstin}
                   onChange={handleChange}
-                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
-                  placeholder="Enter GSTIN"
+                  maxLength={15}
+                  minLength={15}
+                  pattern="[A-Z0-9]{15}"
+                  className="w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all uppercase"
+                  placeholder="Enter GSTIN Number"
+                  title="GSTIN must be exactly 15 alphanumeric characters"
                 />
               </div>
             </div>

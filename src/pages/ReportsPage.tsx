@@ -32,59 +32,91 @@ interface DashboardMetrics {
 
 // Interface for Finance Overview API Response
 interface FinanceSummaryCards {
-    revenue: number;
-    expenses: number;
-    profit: number;
+    total_revenue: number;
+    total_expenses: number;
+    total_profit: number;
+    total_outstanding: number;
+    overall_collection_rate: number;
 }
 
-interface FinanceTableRow {
-    total_amount: number;
-    status: string;
-    due_date: string;
-    client__company_name: string;
+interface RecentHighlight {
+    client_name: string;
+    project_name: string;
+    total_revenue: number;
+    total_expenses: number;
+    profit: number;
+    profit_margin_percent: number;
+    latest_invoice_status: string;
+    last_receipt_date: string;
+    outstanding_amount: number;
+    collection_rate_percent: number;
 }
 
 interface FinanceOverviewResponse {
     summary_cards: FinanceSummaryCards;
-    table_rows: FinanceTableRow[];
+    recent_highlights: RecentHighlight[];
 }
 
-// Dummy Data for tables (will be replaced with API data later)
+// Interface for Financial Reports API Response (dedicated endpoint)
+interface FinancialReportRow {
+    invoice_no: string;
+    invoice_date: string;
+    client_name: string;
+    invoice_total: number;
+    amount_paid: number;
+    outstanding_balance: number;
+    status: string;
+    due_date: string;
+    last_payment_date: string | null;
+    days_overdue: number;
+}
 
-const financialReports = [
-    { id: 1, revenue: '$150,000', expenses: '$45,000', status: 'Paid', history: '2023-10-15', outstanding: '$0' },
-    { id: 2, revenue: '$280,000', expenses: '$92,000', status: 'Pending', history: '2023-11-02', outstanding: '$280,000' },
-    { id: 3, revenue: '$65,000', expenses: '$12,000', status: 'Partial', history: '2023-11-20', outstanding: '$30,000' },
-    { id: 4, revenue: '$420,000', expenses: '$110,000', status: 'Paid', history: '2023-09-28', outstanding: '$0' },
-];
+interface FinancialReportsResponse {
+    rows: FinancialReportRow[];
+}
 
-const projectReports = [
-    { id: 1, name: 'Cloud Migration', status: 'Active', timeline: 'Jan - Dec 2024', utilization: '85%' },
-    { id: 2, name: 'ERP Implementation', status: 'Completed', timeline: 'Jun - Nov 2023', utilization: '92%' },
-    { id: 3, name: 'Security Audit', status: 'Active', timeline: 'Oct 2023 - Mar 2024', utilization: '45%' },
-    { id: 4, name: 'Mobile App Dev', status: 'Active', timeline: 'Feb - Aug 2024', utilization: '70%' },
-];
+// Interface for Project Reports API Response
+interface ProjectReportRow {
+    project_no: number;
+    project_name: string;
+    project_status: string;
+    budget: number;
+    invoiced: number;
+    received: number;
+    expenses: number;
+    profit: number;
+}
 
-const paymentReports = [
-    { id: 1, rate: '95%', aging: '15 Days', analysis: 'On-time', tracking: 'Net 30' },
-    { id: 2, rate: '82%', aging: '45 Days', analysis: 'Delayed', tracking: 'Net 30' },
-    { id: 3, rate: '100%', aging: '0 Days', analysis: 'Early', tracking: 'Net 15' },
-    { id: 4, rate: '75%', aging: '60 Days', analysis: 'Critical', tracking: 'Net 45' },
-];
+interface ProjectReportsResponse {
+    rows: ProjectReportRow[];
+}
 
-const poInvoiceReports = [
-    { id: 1, poStatus: 'Approved', amount: '$45,000', matchStatus: 'Matched', timeline: '10 Days', behavior: 'Reliable' },
-    { id: 2, poStatus: 'Pending', amount: '$12,500', matchStatus: 'Unmatched', timeline: 'N/A', behavior: 'New Client' },
-    { id: 3, poStatus: 'Approved', amount: '$89,000', matchStatus: 'Matched', timeline: '22 Days', behavior: 'Slow Payer' },
-    { id: 4, poStatus: 'Rejected', amount: '$5,000', matchStatus: 'N/A', timeline: 'N/A', behavior: 'N/A' },
-];
+// Interface for Payment Reports API Response
+interface PaymentReportRow {
+    payment_date: string;
+    invoice__invoice_no: string;
+    invoice__client__company_name: string;
+    payment_method: string;
+    amount: number;
+    invoice__status: string;
+}
 
-const allReports = [
-    ...financialReports.map(r => ({ ...r, type: 'Financial' })),
-    ...projectReports.map(r => ({ ...r, type: 'Project' })),
-    ...paymentReports.map(r => ({ ...r, type: 'Payment' })),
-    ...poInvoiceReports.map(r => ({ ...r, type: 'PO & Invoice' })),
-];
+interface PaymentReportsResponse {
+    rows: PaymentReportRow[];
+}
+
+// Interface for PO Invoice Reports API Response
+interface POInvoiceReportRow {
+    po_no: string;
+    vendor__name: string;
+    total_amount: number;
+    paid: number;
+    balance: number;
+}
+
+interface POInvoiceReportsResponse {
+    rows: POInvoiceReportRow[];
+}
 
 type TabType = 'All' | 'Financial Reports' | 'Project Reports' | 'Payment Reports' | 'PO & Invoice Reports';
 
@@ -98,21 +130,33 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
     const [activeTab, setActiveTab] = useState<TabType>('All');
     const [metrics, setMetrics] = useState<DashboardMetrics | null>(null);
     const [financeOverview, setFinanceOverview] = useState<FinanceOverviewResponse | null>(null);
+    const [financialReports, setFinancialReports] = useState<FinancialReportsResponse | null>(null);
+    const [projectReports, setProjectReports] = useState<ProjectReportsResponse | null>(null);
+    const [paymentReports, setPaymentReports] = useState<PaymentReportsResponse | null>(null);
+    const [poInvoiceReports, setPOInvoiceReports] = useState<POInvoiceReportsResponse | null>(null);
     const [loading, setLoading] = useState(true);
 
-    // Fetch dashboard metrics and finance overview from API
+    // Fetch dashboard metrics and all reports from API
     useEffect(() => {
         const fetchData = async () => {
             try {
                 setLoading(true);
-                // Fetch both APIs in parallel
-                const [metricsResponse, financeResponse] = await Promise.all([
+                // Fetch all APIs in parallel
+                const [metricsResponse, financeResponse, financialResponse, projectResponse, paymentResponse, poInvoiceResponse] = await Promise.all([
                     axiosInstance.get('dashboard/metrics/'),
-                    axiosInstance.get('finance/overview/?section=all')
+                    axiosInstance.get('finance/overview/?section=all'),
+                    axiosInstance.get('finance/overview/?section=financial_reports'),
+                    axiosInstance.get('finance/overview/?section=project_reports'),
+                    axiosInstance.get('finance/overview/?section=payment_reports'),
+                    axiosInstance.get('finance/overview/?section=po_invoice_reports')
                 ]);
 
                 setMetrics(metricsResponse.data);
                 setFinanceOverview(financeResponse.data);
+                setFinancialReports(financialResponse.data);
+                setProjectReports(projectResponse.data);
+                setPaymentReports(paymentResponse.data);
+                setPOInvoiceReports(poInvoiceResponse.data);
             } catch (error) {
                 console.error('Error fetching data:', error);
             } finally {
@@ -126,9 +170,9 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
     // Helper function to format currency
     const formatCurrency = (value: string | number) => {
         const num = typeof value === 'string' ? parseFloat(value) : value;
-        return new Intl.NumberFormat('en-US', {
+        return new Intl.NumberFormat('en-IN', {
             style: 'currency',
-            currency: 'USD',
+            currency: 'INR',
             minimumFractionDigits: 0,
             maximumFractionDigits: 0,
         }).format(num);
@@ -141,36 +185,36 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
     };
 
     // Create summary cards from API data
-    const summaryCards = metrics ? [
+    const summaryCards = financeOverview?.summary_cards ? [
         {
-            label: 'Budget',
-            amount: formatCurrency(metrics.budget.value),
+            label: 'Total Revenue',
+            amount: formatCurrency(financeOverview.summary_cards.total_revenue),
             icon: <DollarSign size={20} className="text-blue-600" />,
-            trend: formatTrend(metrics.budget.change)
+            trend: null as string | null
         },
         {
-            label: 'Invoiced',
-            amount: formatCurrency(metrics.invoiced.value),
-            icon: <FileText size={20} className="text-indigo-600" />,
-            trend: formatTrend(metrics.invoiced.change)
-        },
-        {
-            label: 'Received',
-            amount: formatCurrency(metrics.received.value),
-            icon: <CheckCircle size={20} className="text-emerald-600" />,
-            trend: formatTrend(metrics.received.change)
-        },
-        {
-            label: 'Expenses',
-            amount: formatCurrency(metrics.expenses.value),
+            label: 'Total Expenses',
+            amount: formatCurrency(financeOverview.summary_cards.total_expenses),
             icon: <TrendingUp size={20} className="text-rose-600" />,
-            trend: formatTrend(metrics.expenses.change)
+            trend: null as string | null
         },
         {
-            label: 'Profit',
-            amount: formatCurrency(metrics.profit.value),
-            icon: <PieChart size={20} className="text-amber-600" />,
-            trend: formatTrend(metrics.profit.change)
+            label: 'Total Profit',
+            amount: formatCurrency(financeOverview.summary_cards.total_profit),
+            icon: <PieChart size={20} className="text-emerald-600" />,
+            trend: null as string | null
+        },
+        {
+            label: 'Total Outstanding',
+            amount: formatCurrency(financeOverview.summary_cards.total_outstanding),
+            icon: <Clock size={20} className="text-amber-600" />,
+            trend: null as string | null
+        },
+        {
+            label: 'Collection Rate',
+            amount: `${financeOverview.summary_cards.overall_collection_rate.toFixed(2)}%`,
+            icon: <CheckCircle size={20} className="text-indigo-600" />,
+            trend: null as string | null
         },
     ] : [];
 
@@ -183,27 +227,41 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 bg-gray-50 z-10">
                             <tr className="border-b border-gray-200">
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Invoice No</th>
                                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Client Name</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Invoice Amount</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Invoice Total</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Amount Paid</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Outstanding</th>
                                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Status</th>
                                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Due Date</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Last Payment</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {financeOverview?.table_rows.map((row, idx) => (
+                            {financialReports?.rows?.map((row, idx) => (
                                 <tr key={idx} className="hover:bg-gray-50 transition-colors group">
-                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.client__company_name}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{formatCurrency(row.total_amount)}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.invoice_no}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">{row.client_name}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{formatCurrency(row.invoice_total)}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">{formatCurrency(row.amount_paid)}</td>
+                                    <td className="px-6 py-4 text-sm">
+                                        <span className={`font-semibold ${row.outstanding_balance > 0 ? 'text-amber-600' : 'text-emerald-600'}`}>
+                                            {formatCurrency(row.outstanding_balance)}
+                                        </span>
+                                    </td>
                                     <td className="px-6 py-4 text-sm">
                                         <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${row.status === 'Paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                                                row.status === 'Partially Paid' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
-                                                    row.status === 'Issued' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                                                        'bg-rose-50 text-rose-700 border border-rose-100'
+                                            row.status === 'Partially Paid' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                                                row.status === 'Issued' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                                    'bg-rose-50 text-rose-700 border border-rose-100'
                                             }`}>
                                             {row.status}
                                         </span>
                                     </td>
                                     <td className="px-6 py-4 text-sm text-gray-600">{new Date(row.due_date).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">
+                                        {row.last_payment_date ? new Date(row.last_payment_date).toLocaleDateString() : '-'}
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -214,30 +272,38 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 bg-gray-50 z-10">
                             <tr className="border-b border-gray-200">
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Project No</th>
                                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Project Name</th>
                                 <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Status</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Timeline</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Resource Utilization</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Budget</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Invoiced</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Received</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Expenses</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Profit</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {projectReports.map((row) => (
-                                <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.name}</td>
+                            {projectReports?.rows?.map((row) => (
+                                <tr key={row.project_no} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">#{row.project_no}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.project_name}</td>
                                     <td className="px-6 py-4 text-sm">
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${row.status === 'Completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' : 'bg-blue-50 text-blue-700 border border-blue-100'
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium capitalize ${row.project_status === 'completed' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                                            row.project_status === 'planning' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                                                row.project_status === 'in_progress' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                                    'bg-gray-50 text-gray-700 border border-gray-100'
                                             }`}>
-                                            {row.status}
+                                            {row.project_status.replace('_', ' ')}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{row.timeline}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{formatCurrency(row.budget)}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">{formatCurrency(row.invoiced)}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">{formatCurrency(row.received)}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">{formatCurrency(row.expenses)}</td>
                                     <td className="px-6 py-4 text-sm">
-                                        <div className="flex items-center gap-2">
-                                            <div className="w-24 bg-gray-200 rounded-full h-1.5">
-                                                <div className="bg-blue-600 h-1.5 rounded-full" style={{ width: row.utilization }}></div>
-                                            </div>
-                                            <span className="text-xs text-gray-600">{row.utilization}</span>
-                                        </div>
+                                        <span className={`font-semibold ${row.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                                            {formatCurrency(row.profit)}
+                                        </span>
                                     </td>
                                 </tr>
                             ))}
@@ -249,26 +315,39 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 bg-gray-50 z-10">
                             <tr className="border-b border-gray-200">
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Collection Rate</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Aging</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Receipt Analysis</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Payment Terms Tracking</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Payment Date</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Invoice No</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Client Name</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Payment Method</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Amount</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Invoice Status</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {paymentReports.map((row) => (
-                                <tr key={row.id} className="hover:bg-gray-50 transition-colors">
-                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.rate}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{row.aging}</td>
+                            {paymentReports?.rows?.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 text-sm text-gray-700">{new Date(row.payment_date).toLocaleDateString()}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.invoice__invoice_no}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">{row.invoice__client__company_name}</td>
                                     <td className="px-6 py-4 text-sm">
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${row.analysis === 'On-time' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                                            row.analysis === 'Early' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
-                                                'bg-rose-50 text-rose-700 border border-rose-100'
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${row.payment_method === 'Bank Transfer' ? 'bg-blue-50 text-blue-700 border border-blue-100' :
+                                            row.payment_method === 'Credit Card' ? 'bg-purple-50 text-purple-700 border border-purple-100' :
+                                                row.payment_method === 'Debit Card' ? 'bg-indigo-50 text-indigo-700 border border-indigo-100' :
+                                                    'bg-gray-50 text-gray-700 border border-gray-100'
                                             }`}>
-                                            {row.analysis}
+                                            {row.payment_method}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{row.tracking}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{formatCurrency(row.amount)}</td>
+                                    <td className="px-6 py-4 text-sm">
+                                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${row.invoice__status === 'Paid' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
+                                            row.invoice__status === 'Partially Paid' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
+                                                row.invoice__status === 'Cancelled' ? 'bg-rose-50 text-rose-700 border border-rose-100' :
+                                                    'bg-blue-50 text-blue-700 border border-blue-100'
+                                            }`}>
+                                            {row.invoice__status}
+                                        </span>
+                                    </td>
                                 </tr>
                             ))}
                         </tbody>
@@ -279,28 +358,25 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 bg-gray-50 z-10">
                             <tr className="border-b border-gray-200">
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">PO Status</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Invoice Amount</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Receipt Match Status</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Payment Timeline</th>
-                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Client Behavior</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">PO Number</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Vendor Name</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Total Amount</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Paid</th>
+                                <th className="px-6 py-4 text-sm font-semibold text-gray-600 uppercase tracking-wider">Balance</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {poInvoiceReports.map((row) => (
-                                <tr key={row.id} className="hover:bg-gray-50 transition-colors">
+                            {poInvoiceReports?.rows?.map((row, idx) => (
+                                <tr key={idx} className="hover:bg-gray-50 transition-colors">
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.po_no}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">{row.vendor__name}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-semibold">{formatCurrency(row.total_amount)}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-700">{formatCurrency(row.paid)}</td>
                                     <td className="px-6 py-4 text-sm">
-                                        <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${row.poStatus === 'Approved' ? 'bg-emerald-50 text-emerald-700 border border-emerald-100' :
-                                            row.poStatus === 'Pending' ? 'bg-amber-50 text-amber-700 border border-amber-100' :
-                                                'bg-rose-50 text-rose-700 border border-rose-100'
-                                            }`}>
-                                            {row.poStatus}
+                                        <span className={`font-semibold ${row.balance === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                                            {formatCurrency(row.balance)}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.amount}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{row.matchStatus}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{row.timeline}</td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">{row.behavior}</td>
                                 </tr>
                             ))}
                         </tbody>
@@ -308,6 +384,34 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
                 );
             case 'All':
             default:
+                // Combine all reports from API data
+                const allReports: any[] = [
+                    ...(financialReports?.rows?.map(row => ({
+                        type: 'Financial',
+                        primary: row.invoice_no,
+                        secondary: row.client_name,
+                        status: row.status
+                    })) || []),
+                    ...(projectReports?.rows?.map(row => ({
+                        type: 'Project',
+                        primary: row.project_name,
+                        secondary: formatCurrency(row.budget),
+                        status: row.project_status
+                    })) || []),
+                    ...(paymentReports?.rows?.map(row => ({
+                        type: 'Payment',
+                        primary: row.invoice__invoice_no,
+                        secondary: row.invoice__client__company_name,
+                        status: row.payment_method
+                    })) || []),
+                    ...(poInvoiceReports?.rows?.map(row => ({
+                        type: 'PO & Invoice',
+                        primary: row.po_no,
+                        secondary: row.vendor__name,
+                        status: formatCurrency(row.balance)
+                    })) || [])
+                ];
+
                 return (
                     <table className="w-full text-left border-collapse">
                         <thead className="sticky top-0 bg-gray-50 z-10">
@@ -319,35 +423,23 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
-                            {allReports.map((row: any, idx) => (
+                            {allReports.map((row, idx) => (
                                 <tr key={idx} className="hover:bg-gray-50 transition-colors">
                                     <td className="px-6 py-4 text-sm">
                                         <span className="px-2 py-1 bg-gray-100 text-gray-600 rounded text-xs font-bold uppercase">
                                             {row.type}
                                         </span>
                                     </td>
-                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">
-                                        {row.type === 'Financial' ? row.revenue :
-                                            row.type === 'Project' ? row.name :
-                                                row.type === 'Payment' ? row.rate :
-                                                    row.amount}
-                                    </td>
-                                    <td className="px-6 py-4 text-sm text-gray-600">
-                                        {row.type === 'Financial' ? row.expenses :
-                                            row.type === 'Project' ? row.timeline :
-                                                row.type === 'Payment' ? row.aging :
-                                                    row.matchStatus}
-                                    </td>
+                                    <td className="px-6 py-4 text-sm text-gray-700 font-medium">{row.primary}</td>
+                                    <td className="px-6 py-4 text-sm text-gray-600">{row.secondary}</td>
                                     <td className="px-6 py-4 text-sm">
-                                        {row.type === 'Financial' ? (
-                                            <span className="text-emerald-600 font-semibold">{row.status}</span>
-                                        ) : row.type === 'Project' ? (
-                                            <span className="text-blue-600 font-semibold">{row.status}</span>
-                                        ) : row.type === 'Payment' ? (
-                                            <span className="text-indigo-600 font-semibold">{row.analysis}</span>
-                                        ) : (
-                                            <span className="text-amber-600 font-semibold">{row.poStatus}</span>
-                                        )}
+                                        <span className={`font-semibold ${row.type === 'Financial' ? 'text-emerald-600' :
+                                            row.type === 'Project' ? 'text-blue-600 capitalize' :
+                                                row.type === 'Payment' ? 'text-indigo-600' :
+                                                    'text-amber-600'
+                                            }`}>
+                                            {row.type === 'Project' ? row.status.replace('_', ' ') : row.status}
+                                        </span>
                                     </td>
                                 </tr>
                             ))}
@@ -415,10 +507,12 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
                                     <div className="p-2 bg-gray-50 rounded-lg group-hover:bg-white transition-colors border border-transparent group-hover:border-gray-100">
                                         {card.icon}
                                     </div>
-                                    <span className={`text-xs font-bold flex items-center gap-0.5 ${card.trend.startsWith('+') ? 'text-emerald-600' : card.trend.startsWith('-') ? 'text-rose-600' : 'text-gray-600'}`}>
-                                        {card.trend.startsWith('+') ? <ArrowUpRight size={12} /> : card.trend.startsWith('-') ? <ArrowDownRight size={12} /> : null}
-                                        {card.trend}
-                                    </span>
+                                    {card.trend && (
+                                        <span className={`text-xs font-bold flex items-center gap-0.5 ${card.trend.startsWith('+') ? 'text-emerald-600' : card.trend.startsWith('-') ? 'text-rose-600' : 'text-gray-600'}`}>
+                                            {card.trend.startsWith('+') ? <ArrowUpRight size={12} /> : card.trend.startsWith('-') ? <ArrowDownRight size={12} /> : null}
+                                            {card.trend}
+                                        </span>
+                                    )}
                                 </div>
                                 <div className="mt-4">
                                     <p className="text-sm font-medium text-gray-500">{card.label}</p>
@@ -454,19 +548,6 @@ const ReportsPage: React.FC<ReportsPageProps> = ({ userRole, currentPage, onNavi
                     {/* Report Content Area */}
                     <div className="overflow-x-auto">
                         {renderTable()}
-
-                        {/* Empty State (if data was empty) */}
-                        {allReports.length === 0 && (
-                            <div className="flex flex-col items-center justify-center py-20 px-6 text-center">
-                                <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4">
-                                    <FileText size={32} className="text-gray-300" />
-                                </div>
-                                <h3 className="text-lg font-semibold text-gray-900">No report data found</h3>
-                                <p className="text-gray-500 max-w-xs mt-1">
-                                    There is no data available for the selected criteria. Try adjusting your filters.
-                                </p>
-                            </div>
-                        )}
                     </div>
 
                     {/* Table Footer / Pagination Placeholder */}

@@ -71,33 +71,58 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
             return;
         }
 
-
         setIsSaving(true);
         try {
+            // Auto-confirm the quote if we are creating an external project from a quote
+            if (quoteId && projectType === 'external') {
+                try {
+                    console.log(`Auto-confirming quote ${quoteId} before project creation...`);
+                    await axiosInstance.put(`/quotes/${quoteId}/`, {
+                        status: 'Confirmed'
+                    });
+                    console.log(`Quote ${quoteId} confirmed successfully.`);
+                } catch (err) {
+                    console.error('Failed to auto-confirm quote:', err);
+                    // Proceed anyway; let the create project call fail if it must
+                }
+            }
+
             const payload: any = {
                 project_name: projectName,
                 project_type: projectType,
                 start_date: startDate,
                 end_date: dueDate || null,
-                budget: {
-                    use_quoted_amounts: budgetMethod === 'quoted',
-                    currency: 'INR'
-                }
+                budget: {}
             };
 
-            if (projectType === 'external') {
-                // If we have a quoteId, we should probably send it
+            // Configure budget based on project type
+            if (projectType === 'internal') {
+                // Internal projects: use_quoted_amounts must be false
+                payload.budget.use_quoted_amounts = false;
+                payload.budget.total_hours = parseFloat(totalHours) || 0;
+                payload.budget.total_budget = parseFloat(totalBudget) || 0;
+            } else {
+                // External projects
+                payload.budget.use_quoted_amounts = budgetMethod === 'quoted';
+
+                // Include quotation ID for external projects
                 if (quoteId) {
                     payload.created_from_quotation = quoteId;
                 }
-                // The backend might expect client ID or name. 
-                // Based on user request, it's external.
-            }
 
-            if (budgetMethod === 'manual') {
-                payload.budget.total_hours = parseFloat(totalHours) || 0;
-                payload.budget.total_budget = parseFloat(totalBudget) || 0;
-                payload.budget.bills_and_expenses = parseFloat(billsExpenses) || 0;
+                // Add budget fields based on method
+                if (budgetMethod === 'manual') {
+                    payload.budget.total_hours = parseFloat(totalHours) || 0;
+                    if (totalBudget) {
+                        payload.budget.total_budget = parseFloat(totalBudget);
+                    }
+                    payload.budget.bills_and_expenses = parseFloat(billsExpenses) || 0;
+                } else {
+                    // For quoted amounts, include bills_and_expenses if provided
+                    if (billsExpenses) {
+                        payload.budget.bills_and_expenses = parseFloat(billsExpenses) || 0;
+                    }
+                }
             }
 
             console.log('Creating project with payload:', payload);
@@ -130,9 +155,13 @@ export const CreateProjectModal: React.FC<CreateProjectModalProps> = ({
 
                 onClose();
             }
-        } catch (error) {
+        } catch (error: any) {
             console.error('Error creating project:', error);
-            toast.error('Failed to create project');
+            // Display specific error message from backend if available
+            const errorMsg = error.response?.data?.created_from_quotation?.[0] ||
+                error.response?.data?.detail ||
+                'Failed to create project';
+            toast.error(errorMsg);
         } finally {
             setIsSaving(false);
         }

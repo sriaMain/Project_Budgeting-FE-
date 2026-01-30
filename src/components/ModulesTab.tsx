@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Plus, Search, ArrowLeft, Save, Loader2, X } from "lucide-react";
-import { ReusableTable} from "../components/ReusableTable";
+import { ReusableTable } from "../components/ReusableTable";
 import type { Column } from "../components/ReusableTable";
 import AddProductGroupModal from "./AddProductGroupModal";
 import axiosInstance from "../utils/axiosInstance";
@@ -28,10 +28,10 @@ interface ModulesTabProps {
 }
 
 // --- Modules Tab Component ---
-const ModulesTab: React.FC<ModulesTabProps> = ({ 
-  isModalMode = false, 
+const ModulesTab: React.FC<ModulesTabProps> = ({
+  isModalMode = false,
   onModalClose,
-  onServiceAdded 
+  onServiceAdded
 }) => {
   const [view, setView] = useState<"list" | "form">("list");
   const [isLoading, setIsLoading] = useState(false);
@@ -71,7 +71,7 @@ const ModulesTab: React.FC<ModulesTabProps> = ({
     try {
       // Fetch both simultaneously to ensure we have groups for mapping
       const [groupsRes, modulesRes] = await Promise.all([
-        axiosInstance.get("/product-groups"),
+        axiosInstance.get("/product-groups/"),
         axiosInstance.get("/product-services/"),
       ]);
 
@@ -130,11 +130,11 @@ const ModulesTab: React.FC<ModulesTabProps> = ({
       // If in modal mode, notify parent and close
       if (isModalMode && onServiceAdded && response?.data) {
         onServiceAdded(response.data);
-        
+
         // Show success toast
         setToastMessage("Service/Product added successfully!");
         setShowToast(true);
-        
+
         // Reset form
         setFormData({
           id: "",
@@ -143,7 +143,7 @@ const ModulesTab: React.FC<ModulesTabProps> = ({
           product_group: "",
         });
         setErrors({});
-        
+
         // Close modal after delay to show toast
         setTimeout(() => {
           onModalClose?.();
@@ -152,7 +152,7 @@ const ModulesTab: React.FC<ModulesTabProps> = ({
       }
 
       await fetchData(); // Refresh list and re-map
-      
+
       // Show toast and navigate back after delay
       setIsNavigating(true);
       setToastMessage(formData.id ? "Module updated successfully!" : "Module created successfully!");
@@ -272,9 +272,8 @@ const ModulesTab: React.FC<ModulesTabProps> = ({
                           product_group: e.target.value,
                         })
                       }
-                      className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none bg-white transition-all cursor-pointer ${
-                        !formData.product_group && "text-gray-500"
-                      }`}
+                      className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none bg-white transition-all cursor-pointer ${!formData.product_group && "text-gray-500"
+                        }`}
                     >
                       <option value="" disabled>
                         Choose Product Group
@@ -360,7 +359,7 @@ const ModulesTab: React.FC<ModulesTabProps> = ({
             }));
           }}
         />
-        
+
         {/* Toast Notification */}
         {showToast && (
           <Toast
@@ -466,7 +465,7 @@ const ModulesTab: React.FC<ModulesTabProps> = ({
           {isNavigating && (
             <div className="absolute inset-0 bg-white/40 backdrop-blur-[2px] z-10 pointer-events-auto rounded-xl" />
           )}
-          
+
           {/* Breadcrumb / Back */}
           <div className="mb-6 flex items-center gap-2 text-sm">
             <button
@@ -551,9 +550,8 @@ const ModulesTab: React.FC<ModulesTabProps> = ({
                           product_group: e.target.value,
                         })
                       }
-                      className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none bg-white transition-all cursor-pointer ${
-                        !formData.product_group && "text-gray-500"
-                      }`}
+                      className={`w-full px-4 py-2.5 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none appearance-none bg-white transition-all cursor-pointer ${!formData.product_group && "text-gray-500"
+                        }`}
                     >
                       <option value="" disabled>
                         Choose Product Group
@@ -618,7 +616,7 @@ const ModulesTab: React.FC<ModulesTabProps> = ({
           </div>
         </div>
       )}
-      
+
       {/* Toast Notification */}
       {showToast && (
         <Toast

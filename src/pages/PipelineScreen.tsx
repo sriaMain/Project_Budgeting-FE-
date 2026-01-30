@@ -35,9 +35,26 @@ export default function PipelineScreen({
   const [error, setError] = useState<string | null>(null);
   const [expandedStages, setExpandedStages] = useState<Set<string>>(new Set());
 
+  // Filter state
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [selectedStatuses, setSelectedStatuses] = useState<string[]>([]);
+
   useEffect(() => {
     loadPipelineData();
   }, []);
+
+  // Close filter dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as HTMLElement;
+      if (showFilterDropdown && !target.closest('.filter-dropdown-container')) {
+        setShowFilterDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilterDropdown]);
 
   const loadPipelineData = async () => {
     try {
@@ -68,8 +85,22 @@ export default function PipelineScreen({
   };
 
   const handleFilterClick = () => {
-    console.log('Open filters');
+    setShowFilterDropdown(!showFilterDropdown);
   };
+
+  const toggleStatusFilter = (status: string) => {
+    setSelectedStatuses(prev =>
+      prev.includes(status)
+        ? prev.filter(s => s !== status)
+        : [...prev, status]
+    );
+  };
+
+  const clearFilters = () => {
+    setSelectedStatuses([]);
+  };
+
+  const activeFilterCount = selectedStatuses.length;
 
   const toggleStage = (stageName: string) => {
     setExpandedStages(prev => {
@@ -198,6 +229,27 @@ export default function PipelineScreen({
     return null;
   }
 
+  // Apply filters to pipeline data
+  const filteredPipelineData = {
+    ...pipelineData,
+    stages: pipelineData.stages.map(stage => {
+      if (selectedStatuses.length === 0) {
+        return stage; // No filters applied
+      }
+
+      // Filter quotes based on selected statuses
+      const filteredQuotes = stage.quotes.filter(quote =>
+        selectedStatuses.includes(stage.title)
+      );
+
+      return {
+        ...stage,
+        quotes: selectedStatuses.includes(stage.title) ? stage.quotes : [],
+        count: selectedStatuses.includes(stage.title) ? stage.count : 0
+      };
+    })
+  };
+
   return (
     <Layout userRole={userRole} currentPage={currentPage} onNavigate={onNavigate}>
       <div className="space-y-4 sm:space-y-6">
@@ -207,13 +259,53 @@ export default function PipelineScreen({
           <h1 className="text-2xl sm:text-3xl font-bold text-gray-900">Pipeline</h1>
 
           <div className="flex items-center gap-2 sm:gap-3 w-full sm:w-auto">
-            <button
-              onClick={handleFilterClick}
-              className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium text-sm sm:text-base"
-            >
-              <span>Filter</span>
-              <SlidersHorizontal size={18} className="sm:w-5 sm:h-5" />
-            </button>
+            <div className="relative filter-dropdown-container">
+              <button
+                onClick={handleFilterClick}
+                className="flex items-center gap-2 px-3 sm:px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-gray-700 font-medium text-sm sm:text-base relative"
+              >
+                <span>Filter</span>
+                <SlidersHorizontal size={18} className="sm:w-5 sm:h-5" />
+                {activeFilterCount > 0 && (
+                  <span className="absolute -top-2 -right-2 bg-blue-600 text-white text-xs font-bold rounded-full w-5 h-5 flex items-center justify-center">
+                    {activeFilterCount}
+                  </span>
+                )}
+              </button>
+
+              {/* Filter Dropdown */}
+              {showFilterDropdown && (
+                <div className="absolute top-full mt-2 right-0 bg-white border border-gray-200 rounded-lg shadow-lg z-50 w-64">
+                  <div className="p-4">
+                    <div className="flex items-center justify-between mb-3">
+                      <h3 className="font-semibold text-gray-900">Filter by Status</h3>
+                      {activeFilterCount > 0 && (
+                        <button
+                          onClick={clearFilters}
+                          className="text-xs text-blue-600 hover:text-blue-700 font-medium"
+                        >
+                          Clear All
+                        </button>
+                      )}
+                    </div>
+
+                    <div className="space-y-2">
+                      {['Oppurtunity', 'Scoping', 'Proposal', 'Confirmed'].map(status => (
+                        <label key={status} className="flex items-center gap-2 cursor-pointer hover:bg-gray-50 p-2 rounded">
+                          <input
+                            type="checkbox"
+                            checked={selectedStatuses.includes(status)}
+                            onChange={() => toggleStatusFilter(status)}
+                            className="w-4 h-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
+                          />
+                          <span className="text-sm text-gray-700">{status}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
 
             <button
               onClick={handleNewQuote}
@@ -226,13 +318,13 @@ export default function PipelineScreen({
         </div>
 
         {/* Statistics */}
-        <PipelineStatistics stats={pipelineData.stats} />
+        <PipelineStatistics stats={filteredPipelineData.stats} />
 
         {/* Desktop View - Board with Drag and Drop */}
         <div className="hidden md:block overflow-x-auto pb-4">
           <DragDropContext onDragEnd={onDragEnd}>
             <div className="flex gap-4 min-w-max">
-              {pipelineData.stages.map(stage => (
+              {filteredPipelineData.stages.map(stage => (
                 <PipelineStage
                   key={stage.stage}
                   stage={stage}
@@ -245,7 +337,7 @@ export default function PipelineScreen({
 
         {/* Mobile View */}
         <div className="md:hidden space-y-3">
-          {pipelineData.stages.map(stage => {
+          {filteredPipelineData.stages.map(stage => {
             const isExpanded = expandedStages.has(stage.stage);
             const colorClass = STAGE_COLORS[stage.stage] || 'bg-gray-50 border-gray-200';
 
