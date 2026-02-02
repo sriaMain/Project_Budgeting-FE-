@@ -214,13 +214,13 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             // Extract payments from the new API structure
             if (response.data) {
                 const { incoming, outgoing, summary } = response.data;
-                
+
                 // Set incoming payments
                 setPayments(incoming?.payments || []);
-                
+
                 // Set outgoing payments
                 setOutgoingPayments(outgoing?.payments || []);
-                
+
                 // Set payment summary
                 setPaymentSummary({
                     total_invoiced: incoming?.total_received || 0,
@@ -558,10 +558,16 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                             </span>
                         </div>
                         <div className="flex gap-4">
-                            <button className="px-4 py-2 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200">
+                            <button
+                                onClick={() => navigate(`/projects/edit/${projectId}`)}
+                                className="px-4 py-2 bg-purple-200 text-black font-medium rounded-lg hover:bg-purple-300 transition-colors duration-200"
+                            >
                                 ✎ Modify Details
                             </button>
-                            <button className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors duration-200">
+                            <button
+                                onClick={() => setActiveTab('Budget')}
+                                className="px-4 py-2 bg-gray-100 text-gray-700 text-sm font-medium rounded-lg hover:bg-gray-200 transition-colors duration-200"
+                            >
                                 Monthly Budget
                             </button>
                         </div>
@@ -668,100 +674,125 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                     <div className="p-6">
                         {activeTab === 'Tasks' && (
                             <>
-                                <div className="overflow-x-auto">
-                                    <table className="w-full">
-                                        <thead>
-                                            <tr className="border-b border-gray-200">
-                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Assignee</th>
-                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Task title</th>
-                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Status</th>
-                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Activity type</th>
-                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Allocated hours</th>
-                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Consumed hours</th>
-                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Due date</th>
-                                                <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Remaining</th>
-                                            </tr>
-                                        </thead>
-                                        <tbody>
-                                            {isLoadingTasks ? (
-                                                <tr>
-                                                    <td colSpan={8} className="py-12 text-center">
-                                                        <div className="flex flex-col items-center justify-center">
-                                                            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
-                                                            <p className="text-sm text-gray-500">Loading tasks...</p>
-                                                        </div>
-                                                    </td>
-                                                </tr>
-                                            ) : tasks.length === 0 ? (
-                                                <tr>
-                                                    <td colSpan={8} className="py-12 text-center">
-                                                        <p className="text-sm text-gray-500">No tasks found for this project. Click "Add task" to create one.</p>
-                                                    </td>
-                                                </tr>
-                                            ) : (
-                                                tasks.map((task) => (
-                                                    <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
-                                                        <td className="py-4 px-3">
-                                                            <div className="flex items-center gap-2">
-                                                                <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${task.assignee !== 'Unassigned'
-                                                                    ? 'bg-blue-600 text-white'
-                                                                    : 'bg-gray-200 text-gray-400 border-2 border-dashed border-gray-300'
-                                                                    }`}
-                                                                    title={task.assignee}
-                                                                >
-                                                                    {task.assigneeAvatar}
-                                                                </div>
-                                                                <span className="text-sm text-gray-900">&gt;</span>
-                                                                <button
-                                                                    onClick={() => {
-                                                                        setSelectedTaskForAssignment(task);
-                                                                        setIsAssignTaskModalOpen(true);
-                                                                    }}
-                                                                    className="w-6 h-6 rounded-full border-2 border-dotted border-gray-400 hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer flex items-center justify-center"
-                                                                    title={task.assignee !== 'Unassigned' ? 'Reassign task' : 'Assign task'}
-                                                                >
-                                                                    <Plus className="w-3 h-3 text-gray-400 hover:text-blue-500" />
-                                                                </button>
-                                                            </div>
-                                                        </td>
-                                                        <td
-                                                            onClick={async () => {
-                                                                try {
-                                                                    const resp = await axiosInstance.get(`tasks/${task.id}/`);
-                                                                    setSelectedTaskForEdit(resp.data);
-                                                                    setIsAddTaskModalOpen(true);
-                                                                } catch (err) {
-                                                                    console.error('Failed to fetch task details', err);
-                                                                    toast.error('Failed to load task for editing');
-                                                                }
-                                                            }}
-                                                            className="py-4 px-3 text-sm text-gray-900 cursor-pointer"
-                                                        >{task.title}</td>
-                                                        <td className="py-4 px-3">
-                                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
-                                                                {task.status}
-                                                            </span>
-                                                        </td>
-                                                        <td className="py-4 px-3 text-sm text-gray-600">{task.activityType}</td>
-                                                        <td className="py-4 px-3 text-sm text-gray-900">{task.allocatedHours}</td>
-                                                        <td className="py-4 px-3 text-sm text-gray-900">{task.consumedHours}</td>
-                                                        <td className="py-4 px-3 text-sm text-gray-600">{task.dueDate}</td>
-                                                        <td className="py-4 px-3 text-sm text-gray-600">{task.remaining}</td>
+                                {activeSubTab === 'Task list' && (
+                                    <>
+                                        <div className="overflow-x-auto">
+                                            <table className="w-full">
+                                                <thead>
+                                                    <tr className="border-b border-gray-200">
+                                                        <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Assignee</th>
+                                                        <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Task title</th>
+                                                        <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Status</th>
+                                                        <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Activity type</th>
+                                                        <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Allocated hours</th>
+                                                        <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Consumed hours</th>
+                                                        <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Due date</th>
+                                                        <th className="text-left text-xs font-semibold text-gray-700 py-3 px-3">Remaining</th>
                                                     </tr>
-                                                ))
-                                            )}
-                                        </tbody>
-                                    </table>
-                                </div>
-                                <div className="mt-6">
-                                    <button
-                                        onClick={() => setIsAddTaskModalOpen(true)}
-                                        className="inline-flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 font-medium"
-                                    >
-                                        <Plus className="w-4 h-4" />
-                                        Add task
-                                    </button>
-                                </div>
+                                                </thead>
+                                                <tbody>
+                                                    {isLoadingTasks ? (
+                                                        <tr>
+                                                            <td colSpan={8} className="py-12 text-center">
+                                                                <div className="flex flex-col items-center justify-center">
+                                                                    <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mb-2"></div>
+                                                                    <p className="text-sm text-gray-500">Loading tasks...</p>
+                                                                </div>
+                                                            </td>
+                                                        </tr>
+                                                    ) : tasks.length === 0 ? (
+                                                        <tr>
+                                                            <td colSpan={8} className="py-12 text-center">
+                                                                <p className="text-sm text-gray-500">No tasks found for this project. Click "Add task" to create one.</p>
+                                                            </td>
+                                                        </tr>
+                                                    ) : (
+                                                        tasks.map((task) => (
+                                                            <tr key={task.id} className="border-b border-gray-100 hover:bg-gray-50">
+                                                                <td className="py-4 px-3">
+                                                                    <div className="flex items-center gap-2">
+                                                                        <div className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-medium ${task.assignee !== 'Unassigned'
+                                                                            ? 'bg-blue-600 text-white'
+                                                                            : 'bg-gray-200 text-gray-400 border-2 border-dashed border-gray-300'
+                                                                            }`}
+                                                                            title={task.assignee}
+                                                                        >
+                                                                            {task.assigneeAvatar}
+                                                                        </div>
+                                                                        <span className="text-sm text-gray-900">&gt;</span>
+                                                                        <button
+                                                                            onClick={() => {
+                                                                                setSelectedTaskForAssignment(task);
+                                                                                setIsAssignTaskModalOpen(true);
+                                                                            }}
+                                                                            className="w-6 h-6 rounded-full border-2 border-dotted border-gray-400 hover:border-blue-500 hover:bg-blue-50 transition-all cursor-pointer flex items-center justify-center"
+                                                                            title={task.assignee !== 'Unassigned' ? 'Reassign task' : 'Assign task'}
+                                                                        >
+                                                                            <Plus className="w-3 h-3 text-gray-400 hover:text-blue-500" />
+                                                                        </button>
+                                                                    </div>
+                                                                </td>
+                                                                <td
+                                                                    onClick={async () => {
+                                                                        try {
+                                                                            const resp = await axiosInstance.get(`tasks/${task.id}/`);
+                                                                            setSelectedTaskForEdit(resp.data);
+                                                                            setIsAddTaskModalOpen(true);
+                                                                        } catch (err) {
+                                                                            console.error('Failed to fetch task details', err);
+                                                                            toast.error('Failed to load task for editing');
+                                                                        }
+                                                                    }}
+                                                                    className="py-4 px-3 text-sm text-gray-900 cursor-pointer"
+                                                                >{task.title}</td>
+                                                                <td className="py-4 px-3">
+                                                                    <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getStatusColor(task.status)}`}>
+                                                                        {task.status}
+                                                                    </span>
+                                                                </td>
+                                                                <td className="py-4 px-3 text-sm text-gray-600">{task.activityType}</td>
+                                                                <td className="py-4 px-3 text-sm text-gray-900">{task.allocatedHours}</td>
+                                                                <td className="py-4 px-3 text-sm text-gray-900">{task.consumedHours}</td>
+                                                                <td className="py-4 px-3 text-sm text-gray-600">{task.dueDate}</td>
+                                                                <td className="py-4 px-3 text-sm text-gray-600">{task.remaining}</td>
+                                                            </tr>
+                                                        ))
+                                                    )}
+                                                </tbody>
+                                            </table>
+                                        </div>
+                                        <div className="mt-6">
+                                            <button
+                                                onClick={() => setIsAddTaskModalOpen(true)}
+                                                className="inline-flex items-center gap-2 text-sm text-gray-700 hover:text-gray-900 font-medium"
+                                            >
+                                                <Plus className="w-4 h-4" />
+                                                Add task
+                                            </button>
+                                        </div>
+                                    </>
+                                )}
+
+                                {activeSubTab === 'Gantt' && (
+                                    <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+                                        <p className="text-gray-600 text-lg font-medium">Gantt Chart View</p>
+                                        <p className="text-gray-500 text-sm mt-2">Visualize your project timeline. This feature is coming soon.</p>
+                                    </div>
+                                )}
+
+                                {activeSubTab === 'Task Board' && (
+                                    <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+                                        <p className="text-gray-600 text-lg font-medium">Kanban Board View</p>
+                                        <p className="text-gray-500 text-sm mt-2">Manage tasks with a drag-and-drop board. This feature is coming soon.</p>
+                                    </div>
+                                )}
+
+                                {activeSubTab === 'Calendar' && (
+                                    <div className="text-center py-12 bg-gray-50 rounded-lg border border-gray-200">
+                                        <p className="text-gray-600 text-lg font-medium">Calendar View</p>
+                                        <p className="text-gray-500 text-sm mt-2">View tasks and deadlines on a calendar. This feature is coming soon.</p>
+                                    </div>
+                                )}
                             </>
                         )}
 
@@ -1121,7 +1152,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
 
                                                     // Format status text
                                                     const formatStatus = (status: string) => {
-                                                        return status?.replace('_', ' ').split(' ').map(word => 
+                                                        return status?.replace('_', ' ').split(' ').map(word =>
                                                             word.charAt(0).toUpperCase() + word.slice(1)
                                                         ).join(' ') || 'Unknown';
                                                     };
@@ -1174,7 +1205,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="border border-gray-200 rounded-lg overflow-hidden">
                                     <div className="px-6 py-4 bg-gray-50 hover:bg-gray-100 flex items-center justify-between transition-colors">
                                         <h3 className="font-semibold text-blue-600 text-sm">Expenses</h3>
-                                        <button 
+                                        <button
                                             onClick={() => setIsAddExpenseModalOpen(true)}
                                             className="text-black-800 text-sm font-medium hover:text-blue-700"
                                         >
@@ -1191,7 +1222,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                                 {expenses.map((expense: any) => {
                                                     // Get category label from the fetched categories or capitalize the key
                                                     const categoryLabel = expense.category.charAt(0).toUpperCase() + expense.category.slice(1);
-                                                    
+
                                                     return (
                                                         <div
                                                             key={expense.id}
@@ -1206,17 +1237,16 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                                                     <span className="text-xs text-gray-500">
                                                                         {categoryLabel}
                                                                     </span>
-                                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-                                                                        expense.is_fully_paid
-                                                                            ? 'bg-green-50 text-green-700'
+                                                                    <span className={`px-2 py-1 rounded-full text-xs font-medium ${expense.is_fully_paid
+                                                                        ? 'bg-green-50 text-green-700'
+                                                                        : expense.total_paid > 0
+                                                                            ? 'bg-yellow-50 text-yellow-700'
+                                                                            : 'bg-red-50 text-red-700'
+                                                                        }`}>
+                                                                        {expense.is_fully_paid
+                                                                            ? 'Paid'
                                                                             : expense.total_paid > 0
-                                                                                ? 'bg-yellow-50 text-yellow-700'
-                                                                                : 'bg-red-50 text-red-700'
-                                                                    }`}>
-                                                                        {expense.is_fully_paid 
-                                                                            ? 'Paid' 
-                                                                            : expense.total_paid > 0 
-                                                                                ? 'Partially Paid' 
+                                                                                ? 'Partially Paid'
                                                                                 : 'Unpaid'}
                                                                     </span>
                                                                 </div>
@@ -1773,71 +1803,77 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
             </div>
 
             {/* Add Task Modal */}
-            {isAddTaskModalOpen && project && (
-                <AddTaskModal
-                    isOpen={isAddTaskModalOpen}
-                    onClose={() => { setIsAddTaskModalOpen(false); setSelectedTaskForEdit(null); }}
-                    onTaskAdded={handleTaskAdded}
-                    prefilledProjectId={project.id || parseInt(projectId || '0')}
-                    prefilledProjectName={project.project_name || `Project #${projectId}`}
-                    editingTask={selectedTaskForEdit}
-                    onTaskUpdated={async (updatedApiTask: any) => {
-                        if (updatedApiTask && updatedApiTask.id) {
-                            const taskId = updatedApiTask.id.toString();
-                            setTasks(prev => prev.map(t => t.id === taskId ? {
-                                ...t,
-                                assignee: updatedApiTask.assigned_to?.username || 'Unassigned',
-                                assigneeAvatar: updatedApiTask.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
-                                title: updatedApiTask.title || t.title,
-                                status: (updatedApiTask.status || t.status) as Task['status'],
-                                activityType: updatedApiTask.activity_type || t.activityType,
-                                allocatedHours: updatedApiTask.allocated_hours ? `${updatedApiTask.allocated_hours}h` : t.allocatedHours,
-                                consumedHours: updatedApiTask.consumed_hours ? `${updatedApiTask.consumed_hours}h` : t.consumedHours,
-                                dueDate: updatedApiTask.due_date ? new Date(updatedApiTask.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : t.dueDate,
-                                remaining: updatedApiTask.remaining_hours ? `${updatedApiTask.remaining_hours}h` : updatedApiTask.allocated_hours ? `${updatedApiTask.allocated_hours}h` : t.remaining
-                            } : t));
-                        } else {
-                            // fallback to refetch if no data returned
-                            try {
-                                const response = await axiosInstance.get(`/tasks/${projectId}/tasks/`);
-                                if (response.data && Array.isArray(response.data) && response.data.length > 0) {
-                                    const projectTasksData = response.data[0];
-                                    if (projectTasksData.Tasks && Array.isArray(projectTasksData.Tasks)) {
-                                        const mappedTasks: Task[] = projectTasksData.Tasks.map(mapApiTaskToTask);
-                                        setTasks(mappedTasks);
+            {
+                isAddTaskModalOpen && project && (
+                    <AddTaskModal
+                        isOpen={isAddTaskModalOpen}
+                        onClose={() => { setIsAddTaskModalOpen(false); setSelectedTaskForEdit(null); }}
+                        onTaskAdded={handleTaskAdded}
+                        prefilledProjectId={project.id || parseInt(projectId || '0')}
+                        prefilledProjectName={project.project_name || `Project #${projectId}`}
+                        editingTask={selectedTaskForEdit}
+                        onTaskUpdated={async (updatedApiTask: any) => {
+                            if (updatedApiTask && updatedApiTask.id) {
+                                const taskId = updatedApiTask.id.toString();
+                                setTasks(prev => prev.map(t => t.id === taskId ? {
+                                    ...t,
+                                    assignee: updatedApiTask.assigned_to?.username || 'Unassigned',
+                                    assigneeAvatar: updatedApiTask.assigned_to?.username?.substring(0, 2).toUpperCase() || '○',
+                                    title: updatedApiTask.title || t.title,
+                                    status: (updatedApiTask.status || t.status) as Task['status'],
+                                    activityType: updatedApiTask.activity_type || t.activityType,
+                                    allocatedHours: updatedApiTask.allocated_hours ? `${updatedApiTask.allocated_hours}h` : t.allocatedHours,
+                                    consumedHours: updatedApiTask.consumed_hours ? `${updatedApiTask.consumed_hours}h` : t.consumedHours,
+                                    dueDate: updatedApiTask.due_date ? new Date(updatedApiTask.due_date).toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }) : t.dueDate,
+                                    remaining: updatedApiTask.remaining_hours ? `${updatedApiTask.remaining_hours}h` : updatedApiTask.allocated_hours ? `${updatedApiTask.allocated_hours}h` : t.remaining
+                                } : t));
+                            } else {
+                                // fallback to refetch if no data returned
+                                try {
+                                    const response = await axiosInstance.get(`/tasks/${projectId}/tasks/`);
+                                    if (response.data && Array.isArray(response.data) && response.data.length > 0) {
+                                        const projectTasksData = response.data[0];
+                                        if (projectTasksData.Tasks && Array.isArray(projectTasksData.Tasks)) {
+                                            const mappedTasks: Task[] = projectTasksData.Tasks.map(mapApiTaskToTask);
+                                            setTasks(mappedTasks);
+                                        }
                                     }
+                                } catch (error) {
+                                    console.error('Error refetching tasks after update:', error);
                                 }
-                            } catch (error) {
-                                console.error('Error refetching tasks after update:', error);
                             }
-                        }
-                    }}
-                />
-            )}
+                        }}
+                    />
+                )
+            }
 
             {/* Assign Task Modal */}
-            {isAssignTaskModalOpen && selectedTaskForAssignment && (
-                <AssignTaskModal
-                    isOpen={isAssignTaskModalOpen}
-                    onClose={() => {
-                        setIsAssignTaskModalOpen(false);
-                        setSelectedTaskForAssignment(null);
-                    }}
-                    onAssignmentSuccess={handleAssignmentSuccess}
-                    task={selectedTaskForAssignment}
-                />
-            )}
+            {
+                isAssignTaskModalOpen && selectedTaskForAssignment && (
+                    <AssignTaskModal
+                        isOpen={isAssignTaskModalOpen}
+                        onClose={() => {
+                            setIsAssignTaskModalOpen(false);
+                            setSelectedTaskForAssignment(null);
+                        }}
+                        onAssignmentSuccess={handleAssignmentSuccess}
+                        task={selectedTaskForAssignment}
+                    />
+                )
+            }
 
             {/* Add Expense Modal */}
-            {isAddExpenseModalOpen && projectId && (
-                <AddExpenseModal
-                    isOpen={isAddExpenseModalOpen}
-                    onClose={() => setIsAddExpenseModalOpen(false)}
-                    projectId={projectId}
-                    onExpenseAdded={handleExpenseAdded}
-                />
-            )}
-        </Layout>
+            {
+                isAddExpenseModalOpen && projectId && (
+                    <AddExpenseModal
+                        isOpen={isAddExpenseModalOpen}
+                        onClose={() => setIsAddExpenseModalOpen(false)}
+                        projectId={projectId}
+                        onExpenseAdded={handleExpenseAdded}
+                    />
+                )
+            }
+        </Layout >
     );
 };
 

@@ -100,6 +100,9 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 		totalHours: 0
 	});
 
+	const [filterStatus, setFilterStatus] = useState<'all' | 'active'>('all');
+	const [showMyProjects, setShowMyProjects] = useState(false);
+
 	useEffect(() => {
 		fetchProjects();
 	}, []);
@@ -166,12 +169,22 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 		}
 	};
 
-	// Filter company groups based on search query
+	// Filter company groups based on search query and status filters
 	const filteredCompanyGroups = companyGroups.map(company => {
-		const filteredProjects = company.projects.filter(project =>
-			project.project_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-			company.company_name.toLowerCase().includes(searchQuery.toLowerCase())
-		);
+		const filteredProjects = company.projects.filter(project => {
+			const matchesSearch = project.project_name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+				company.company_name.toLowerCase().includes(searchQuery.toLowerCase());
+
+			const matchesStatus = filterStatus === 'all' ||
+				(filterStatus === 'active' &&
+					(project.status.toLowerCase() === 'in_progress' ||
+						project.status.toLowerCase() === 'in progress'));
+
+			// Mock "My Projects" filter - effectively showing all for now as we don't have user assignment in list view
+			const matchesMyProjects = !showMyProjects || true;
+
+			return matchesSearch && matchesStatus && matchesMyProjects;
+		});
 
 		return {
 			...company,
@@ -207,13 +220,22 @@ export default function ProjectsScreen({ userRole, currentPage, onNavigate }: an
 								New
 							</button>
 							<div className="h-8 w-[1px] bg-gray-200 mx-2"></div>
-							<button className="px-4 py-2 bg-gray-100 text-gray-900 rounded-lg text-sm font-medium whitespace-nowrap">
+							<button
+								onClick={() => setShowMyProjects(!showMyProjects)}
+								className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${showMyProjects ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-900 hover:bg-gray-200'}`}
+							>
 								My Projects
 							</button>
-							<button className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium whitespace-nowrap">
-								Status: Active Projects
+							<button
+								onClick={() => setFilterStatus(prev => prev === 'all' ? 'active' : 'all')}
+								className={`px-4 py-2 rounded-lg text-sm font-medium whitespace-nowrap transition-colors ${filterStatus === 'active' ? 'bg-blue-100 text-blue-700' : 'text-gray-600 hover:bg-gray-50'}`}
+							>
+								Status: {filterStatus === 'active' ? 'Active Projects' : 'All Projects'}
 							</button>
-							<button className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium flex items-center gap-2 border border-gray-200 whitespace-nowrap">
+							<button
+								onClick={() => alert('Advanced filters coming soon')}
+								className="px-4 py-2 text-gray-600 hover:bg-gray-50 rounded-lg text-sm font-medium flex items-center gap-2 border border-gray-200 whitespace-nowrap"
+							>
 								<Filter size={16} />
 								Filters
 							</button>

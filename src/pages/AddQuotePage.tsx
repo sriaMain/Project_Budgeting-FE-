@@ -25,6 +25,8 @@ interface ProductRow {
   unit: string;
   unit_price: number;
   amount: number;
+  backendId?: number;
+  serviceId?: number;
 }
 
 interface POC {
@@ -130,7 +132,8 @@ export default function AddQuotePage() {
       quantity: 0,
       unit: '',
       unit_price: 0,
-      amount: 0
+      amount: 0,
+      backendId: undefined
     }
   ]);
   const [taxPercentage, setTaxPercentage] = useState(0);
@@ -200,23 +203,16 @@ export default function AddQuotePage() {
           setOriginalStatus(data.status || '');
 
           if (data.items && data.items.length > 0) {
-            const mappedItems = data.items.map((item: {
-              product_service_details?: {
-                product_group?: string;
-                product_service_name?: string;
-              };
-              description?: string;
-              quantity: string | number;
-              unit?: string;
-              price_per_unit: string | number;
-            }) => ({
+            const mappedItems = data.items.map((item: any) => ({
               id: crypto.randomUUID(),
-              group: item.product_service_details?.product_group || '',
-              product: item.product_service_details?.product_service_name || '',
+              group: item.product_service_details?.product_group || item.product_group || '',
+              product: item.product_service_details?.product_service_name || item.product_name || '',
               description: item.description || '',
               quantity: typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity) || 0),
               unit: item.unit || '',
               unit_price: typeof item.price_per_unit === 'number' ? item.price_per_unit : (parseFloat(item.price_per_unit) || 0),
+              backendId: item.id,
+              serviceId: item.product_service,
               amount: (typeof item.quantity === 'number' ? item.quantity : (parseFloat(item.quantity) || 0)) *
                 (typeof item.price_per_unit === 'number' ? item.price_per_unit : (parseFloat(item.price_per_unit) || 0))
             }));
@@ -344,6 +340,25 @@ export default function AddQuotePage() {
     setErrors({});
   };
 
+  // Effect to populate product names from service IDs once services are loaded
+  useEffect(() => {
+    if (services.length > 0 && items.some(item => item.serviceId && !item.product)) {
+      setItems(prev => prev.map(item => {
+        if (item.serviceId && !item.product) {
+          const service = services.find(s => s.id === item.serviceId?.toString());
+          if (service) {
+            return {
+              ...item,
+              product: service.product_service_name,
+              group: service.product_group
+            };
+          }
+        }
+        return item;
+      }));
+    }
+  }, [services, items.length]); // Depend on services and items count, not deep items to avoid infinite loop
+
   const handleItemChange = (id: string, field: keyof ProductRow, value: string | number) => {
     setItems(prev => prev.map(item => {
       if (item.id === id) {
@@ -369,7 +384,8 @@ export default function AddQuotePage() {
       quantity: 0,
       unit: unitChoices.length > 0 ? unitChoices[0].value : '',
       unit_price: 0,
-      amount: 0
+      amount: 0,
+      backendId: undefined
     }]);
   };
 
@@ -403,9 +419,11 @@ export default function AddQuotePage() {
       }
 
       const quoteItems = items
+        .filter(item => item.product) // Filter out empty rows
         .map(item => {
           const service = services.find(s => s.product_service_name === item.product);
           return {
+            ...(item.backendId ? { id: item.backendId } : {}), // Include ID if it exists (for updates)
             product_service: service ? parseInt(service.id) : null,
             description: item.description || '',
             quantity: item.quantity,
@@ -413,6 +431,8 @@ export default function AddQuotePage() {
             price_per_unit: item.unit_price.toFixed(2)
           };
         });
+
+      console.log('Submitting payload items:', quoteItems);
 
       // Build payload - only include status if it changed (for edit mode)
       const basePayload = projectId ? {
