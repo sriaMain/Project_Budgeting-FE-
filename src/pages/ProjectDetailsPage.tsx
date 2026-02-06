@@ -328,14 +328,15 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
         if (!file || !projectId) return;
 
         setIsUploading(true);
+
+        // Create FormData with only file and category
         const formData = new FormData();
         formData.append('file', file);
-        formData.append('category', 'other'); // Default category
+        formData.append('category', 'other');
 
         try {
-            await axiosInstance.post(`/projects/${projectId}/attachments/`, formData, {
-                headers: { 'Content-Type': 'multipart/form-data' }
-            });
+            // Don't set Content-Type - let browser handle it automatically
+            await axiosInstance.post(`/projects/${projectId}/attachments/`, formData);
             toast.success('File uploaded successfully');
             fetchAttachments();
         } catch (error) {
@@ -1280,10 +1281,7 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                 <div className="space-y-6">
                                     {/* Project Info Section */}
                                     <div className="border border-gray-200 rounded-lg overflow-hidden">
-                                        <div className="px-6 py-4 bg-gray-50 flex items-center justify-between">
-                                            <h3 className="font-semibold text-gray-900 text-sm">Project Info</h3>
-                                            <button className="text-blue-600 text-sm font-medium hover:text-blue-700">Modify</button>
-                                        </div>
+
                                         <div className="px-6 py-6 bg-white">
                                             {project ? (
                                                 <div className="space-y-4">
@@ -1292,31 +1290,6 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                                         <div>
                                                             <label className="text-xs font-medium text-gray-500 uppercase">Project Name</label>
                                                             <p className="text-sm text-gray-900 mt-1">{project.project_name}</p>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Company Name */}
-                                                    {project.company_name && (
-                                                        <div>
-                                                            <label className="text-xs font-medium text-gray-500 uppercase">Company</label>
-                                                            <p className="text-sm text-gray-900 mt-1">{project.company_name}</p>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Status */}
-                                                    {project.status && (
-                                                        <div>
-                                                            <label className="text-xs font-medium text-gray-500 uppercase">Status</label>
-                                                            <div className="mt-1">
-                                                                <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium ${project.status === 'Active' || project.status === 'active'
-                                                                    ? 'bg-green-50 text-green-700'
-                                                                    : project.status === 'Completed' || project.status === 'completed'
-                                                                        ? 'bg-blue-50 text-blue-700'
-                                                                        : 'bg-gray-50 text-gray-700'
-                                                                    }`}>
-                                                                    {project.status}
-                                                                </span>
-                                                            </div>
                                                         </div>
                                                     )}
 
@@ -1367,26 +1340,6 @@ const ProjectDetailsPage: React.FC<ProjectDetailsPageProps> = ({ userRole, curre
                                                                     year: 'numeric'
                                                                 })}
                                                             </p>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Created From Quotation */}
-                                                    {project.created_from_quotation && (
-                                                        <div>
-                                                            <label className="text-xs font-medium text-gray-500 uppercase">Created From Quote</label>
-                                                            <p className="text-sm text-blue-600 mt-1 cursor-pointer hover:underline"
-                                                                onClick={() => navigate(`/pipeline/quote/${project.created_from_quotation}`)}
-                                                            >
-                                                                Quote #{project.created_from_quotation}
-                                                            </p>
-                                                        </div>
-                                                    )}
-
-                                                    {/* Description */}
-                                                    {project.description && (
-                                                        <div>
-                                                            <label className="text-xs font-medium text-gray-500 uppercase">Description</label>
-                                                            <p className="text-sm text-gray-900 mt-1 whitespace-pre-wrap">{project.description}</p>
                                                         </div>
                                                     )}
                                                 </div>

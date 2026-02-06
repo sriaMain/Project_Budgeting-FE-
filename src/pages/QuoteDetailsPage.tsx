@@ -129,7 +129,7 @@ export default function QuoteDetailsPage({
     const handleDownloadPDF = async () => {
         try {
             setIsActionLoading(true);
-            const response = await axiosInstance.get(`/quotes/${quoteNo}/pdf`, {
+            const response = await axiosInstance.get(`/quotes/${quoteNo}/pdf/`, {
                 responseType: 'blob'
             });
 
@@ -165,16 +165,10 @@ export default function QuoteDetailsPage({
         { header: 'Unit Price', accessor: 'price_per_unit', className: 'text-right' },
         { header: 'Amount', accessor: 'amount', className: 'text-right' },
         { header: 'Cost', accessor: 'cost', className: 'text-right' },
-        { header: 'PO', accessor: 'po_number', className: 'text-center' },
-        { header: 'Bill No', accessor: 'bill_number', className: 'text-center' }
+       
     ];
 
     const handleEdit = () => {
-        // Prevent editing if quote is confirmed
-        if (quoteData?.status?.toLowerCase() === 'confirmed') {
-            toast.error('Cannot edit a confirmed quote');
-            return;
-        }
         navigate(`/pipeline/edit-quote/${quoteNo}`);
     };
 
@@ -219,20 +213,16 @@ export default function QuoteDetailsPage({
                     <div className="flex gap-3">
                         <button
                             onClick={handleEdit}
-                            disabled={isConfirmed}
-                            className={`p-2 rounded-lg transition-colors ${isConfirmed
-                                ? 'bg-gray-100 cursor-not-allowed opacity-50'
-                                : 'hover:bg-gray-100'
-                                }`}
-                            title={isConfirmed ? 'Cannot edit confirmed quote' : 'Edit quote'}
+                            className="p-2 rounded-lg transition-colors hover:bg-gray-100"
+                            title="Edit quote"
                         >
-                            <Edit className={`w-5 h-5 ${isConfirmed ? 'text-gray-400' : 'text-gray-600'}`} />
+                            <Edit className="w-5 h-5 text-gray-600" />
                         </button>
                     </div>
                 </div>
 
                 {/* Quote Information Card */}
-                <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
+                <div className="bg-white rounded-lg shadow-lg border border-gray-200 p-6">
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
                         <InfoDisplay label="Quote No" value={quoteData.quote_no} />
                         <InfoDisplay label="Author" value={quoteData.author} />

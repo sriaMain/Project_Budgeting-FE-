@@ -128,11 +128,8 @@ export function AddTaskModal({
             fetchUsers();
             fetchServicesAndUsers();
             fetchStatusChoices();
-            if (!isProjectReadOnly) {
-                fetchProjects();
-            } else {
-                setIsLoadingProjects(false);
-            }
+            // Always fetch projects to populate the dropdown
+            fetchProjects();
 
             // Reset form
             setFormData({
@@ -250,10 +247,34 @@ export function AddTaskModal({
         try {
             const response = await axiosInstance.get('projects/');
             if (response.status === 200) {
-                setProjects(response.data);
+                // Handle nested structure: response.data.Projects contains companies with project_details
+                if (response.data && response.data.Projects && Array.isArray(response.data.Projects)) {
+                    const allProjects: Project[] = [];
+                    response.data.Projects.forEach((company: any) => {
+                        if (company.project_details && Array.isArray(company.project_details)) {
+                            company.project_details.forEach((project: any) => {
+                                allProjects.push({
+                                    project_no: project.project_no || project.id,
+                                    project_name: project.project_name,
+                                    status: project.status,
+                                    start_date: project.start_date,
+                                    end_date: project.end_date
+                                });
+                            });
+                        }
+                    });
+                    setProjects(allProjects);
+                } else if (Array.isArray(response.data)) {
+                    // Fallback: if response is already a flat array
+                    setProjects(response.data);
+                } else {
+                    console.warn('Unexpected projects response structure:', response.data);
+                    setProjects([]);
+                }
             }
         } catch (error) {
             console.error('Failed to fetch projects:', error);
+            setProjects([]);
         } finally {
             setIsLoadingProjects(false);
         }

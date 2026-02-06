@@ -10,6 +10,7 @@ import { Layout } from '../components/Layout';
 import { RecordPaymentModal, type PaymentData } from '../components/RecordPaymentModal';
 import { toast } from 'react-hot-toast';
 import axiosInstance from '../utils/axiosInstance';
+import { useInvoiceStatusChoices } from '../hooks/useInvoiceStatusChoices';
 
 interface InvoiceDetailsScreenProps {
     userRole?: 'admin' | 'user' | 'manager';
@@ -27,8 +28,6 @@ interface ProductRow {
     amount: string;
 }
 
-type InvoiceStatus = 'Sent' | 'Paid' | 'Unpaid' | 'Overdue' | 'Cancelled/Rejected';
-
 export default function InvoiceDetailsScreen({
     userRole = 'admin',
     currentPage = 'projects',
@@ -36,7 +35,8 @@ export default function InvoiceDetailsScreen({
 }: InvoiceDetailsScreenProps) {
     const { invoiceId } = useParams<{ invoiceId: string }>();
     const navigate = useNavigate();
-    const [status, setStatus] = useState<InvoiceStatus>('Unpaid');
+    const { statusChoices, loading: statusLoading } = useInvoiceStatusChoices();
+    const [status, setStatus] = useState<string>('Unpaid');
     const [showStatusDropdown, setShowStatusDropdown] = useState(false);
     const [isRecordPaymentOpen, setIsRecordPaymentOpen] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
@@ -44,6 +44,7 @@ export default function InvoiceDetailsScreen({
     const [productRows, setProductRows] = useState<ProductRow[]>([]);
     const [totals, setTotals] = useState<any>({});
     const [isActionLoading, setIsActionLoading] = useState(false);
+    const [isEditMode, setIsEditMode] = useState(false);
 
     // Fetch invoice data - extracted as reusable function
     const fetchInvoiceData = async () => {
@@ -99,28 +100,133 @@ export default function InvoiceDetailsScreen({
         fetchInvoiceData();
     }, [invoiceId]);
 
-    const statusOptions: InvoiceStatus[] = ['Sent', 'Paid', 'Unpaid', 'Overdue', 'Cancelled/Rejected'];
-
-    const getStatusColor = (status: InvoiceStatus) => {
-        switch (status) {
-            case 'Paid':
-                return 'bg-green-100 text-green-700 border-green-200';
-            case 'Sent':
-                return 'bg-blue-100 text-blue-700 border-blue-200';
-            case 'Unpaid':
-                return 'bg-red-100 text-red-700 border-red-200';
-            case 'Overdue':
-                return 'bg-orange-100 text-orange-700 border-orange-200';
-            case 'Cancelled/Rejected':
-                return 'bg-gray-100 text-gray-700 border-gray-200';
-            default:
-                return 'bg-gray-100 text-gray-700 border-gray-200';
+    // Handle back button - navigate to project finances tab
+    const handleBack = () => {
+        const projectId = invoiceData?.project?.id;
+        if (projectId) {
+            navigate(`/projects/${projectId}?tab=finances`);
+        } else {
+            navigate(-1); // Fallback
         }
     };
 
-    const handleStatusChange = (newStatus: InvoiceStatus) => {
-        setStatus(newStatus);
-        setShowStatusDropdown(false);
+    const getStatusColor = (status: string) => {
+        const statusLower = status.toLowerCase();
+        if (statusLower.includes('paid') && !statusLower.includes('partially')) {
+            return 'bg-green-100 text-green-700 border-green-200';
+        } else if (statusLower.includes('issued') || statusLower.includes('sent')) {
+            return 'bg-blue-100 text-blue-700 border-blue-200';
+        } else if (statusLower.includes('draft') || statusLower.includes('unpaid')) {
+            return 'bg-red-100 text-red-700 border-red-200';
+        } else if (statusLower.includes('overdue')) {
+            return 'bg-orange-100 text-orange-700 border-orange-200';
+        } else if (statusLower.includes('partially')) {
+            return 'bg-yellow-100 text-yellow-700 border-yellow-200';
+        } else if (statusLower.includes('cancel')) {
+            return 'bg-gray-100 text-gray-700 border-gray-200';
+        }
+        return 'bg-gray-100 text-gray-700 border-gray-200';
+    };
+
+    const handleStatusChange = async (newStatus: string) => {
+        if (!invoiceId || !invoiceData) return;
+
+        try {
+            setIsActionLoading(true);
+
+            // Prepare the complete invoice data for PUT request
+            const updateData = {
+                status: newStatus,
+                client: invoiceData.client,
+                quote: invoiceData.quote,
+                issue_date: invoiceData.issue_date,
+                due_date: invoiceData.due_date,
+                sub_total: invoiceData.sub_total,
+                tax_percentage: invoiceData.tax_percentage,
+                tax_amount: invoiceData.tax_amount,
+                discount_amount: invoiceData.discount_amount,
+                total_amount: invoiceData.total_amount,
+                notes: invoiceData.notes || '',
+                terms_conditions: invoiceData.terms_conditions || '',
+                items: invoiceData.items.map((item: any) => ({
+                    product_service: item.product_service_id,
+                    description: item.description || '',
+                    quantity: item.quantity,
+                    unit: item.unit,
+                    price_per_unit: item.price_per_unit,
+                    discount_percentage: item.discount_percentage || '0.00',
+                    amount: item.amount
+                }))
+            };
+
+            // Send PUT request to update status
+            const response = await axiosInstance.put(`/invoices/${invoiceId}/`, updateData);
+
+            // Update local state with the response
+            setStatus(response.data.status_display || newStatus);
+            setShowStatusDropdown(false);
+
+            // Refetch invoice data to ensure everything is in sync
+            await fetchInvoiceData();
+
+            toast.success(`Invoice status updated to ${newStatus}`);
+        } catch (error) {
+            console.error('Error updating invoice status:', error);
+            toast.error('Failed to update invoice status');
+            // Revert to previous status on error
+            setShowStatusDropdown(false);
+        } finally {
+            setIsActionLoading(false);
+        }
+    };
+
+    const handleSaveChanges = async () => {
+        if (!invoiceId || !invoiceData) return;
+
+        try {
+            setIsActionLoading(true);
+
+            // Prepare the complete invoice data for PUT request using invoiceData directly
+            const updateData = {
+                status: invoiceData.status,
+                client: invoiceData.client,
+                quote: invoiceData.quote,
+                issue_date: invoiceData.issue_date,
+                due_date: invoiceData.due_date,
+                sub_total: invoiceData.sub_total,
+                tax_percentage: invoiceData.tax_percentage,
+                tax_amount: invoiceData.tax_amount,
+                discount_amount: invoiceData.discount_amount,
+                total_amount: invoiceData.total_amount,
+                notes: invoiceData.notes || '',
+                terms_conditions: invoiceData.terms_conditions || '',
+                items: invoiceData.items.map((item: any) => ({
+                    product_service: item.product_service_id || item.id,
+                    description: item.description || '',
+                    quantity: item.quantity.toString(),
+                    unit: item.unit,
+                    price_per_unit: item.price_per_unit,
+                    discount_percentage: item.discount_percentage || '0.00',
+                    amount: item.amount
+                }))
+            };
+
+            console.log('Sending PUT request with data:', updateData);
+
+            // Send PUT request to update invoice - ONLY ONCE
+            await axiosInstance.put(`/invoices/${invoiceId}/`, updateData);
+
+            // Refetch invoice data to show updated values
+            await fetchInvoiceData();
+
+            toast.success('Invoice updated successfully!');
+            setIsEditMode(false);
+        } catch (error) {
+            console.error('Error updating invoice:', error);
+            toast.error('Failed to update invoice');
+        } finally {
+            setIsActionLoading(false);
+        }
     };
 
     const handlePaymentRecorded = async (paymentData: PaymentData) => {
@@ -150,11 +256,6 @@ export default function InvoiceDetailsScreen({
         }
     };
 
-    const handleBack = () => {
-        // Navigate to pipeline page (main invoices/finances section)
-        navigate('/pipeline');
-    };
-
     const handleDelete = async () => {
         if (!invoiceId) return;
 
@@ -176,7 +277,7 @@ export default function InvoiceDetailsScreen({
         }
     };
 
-    
+
 
     const handleDownloadPDF = async () => {
         if (!invoiceId) return;
@@ -248,9 +349,25 @@ export default function InvoiceDetailsScreen({
                         <h1 className="text-2xl font-bold text-gray-900">Invoice Details</h1>
                     </div>
                     <div className="flex items-center gap-3">
-                        <button className="p-2 hover:bg-gray-100 rounded-lg transition-colors">
-                            <Edit className="w-5 h-5 text-gray-600" />
+                        <button
+                            onClick={() => setIsEditMode(!isEditMode)}
+                            className={`p-2 hover:bg-gray-100 rounded-lg transition-colors ${isEditMode ? 'bg-blue-50' : ''}`}
+                            title={isEditMode ? "Cancel Edit" : "Edit Invoice"}
+                        >
+                            <Edit className={`w-5 h-5 ${isEditMode ? 'text-blue-600' : 'text-gray-600'}`} />
                         </button>
+                        {isEditMode && (
+                            <>
+                                <button
+                                    onClick={handleSaveChanges}
+                                    disabled={isActionLoading}
+                                    className="bg-green-600 hover:bg-green-700 text-white px-5 py-2.5 rounded-lg font-semibold transition-colors shadow-md hover:shadow-lg disabled:opacity-50"
+                                >
+                                    {isActionLoading ? 'Saving...' : 'Save Changes'}
+                                </button>
+
+                            </>
+                        )}
                         {status !== 'Paid' && (
                             <button
                                 onClick={() => setIsRecordPaymentOpen(true)}
@@ -273,7 +390,16 @@ export default function InvoiceDetailsScreen({
                             </div>
                             <div className="mb-4">
                                 <label className="text-sm text-gray-500 block mb-1">Date of Issue:</label>
-                                <p className="text-base font-medium text-gray-900">{invoiceData.issue_date}</p>
+                                {isEditMode ? (
+                                    <input
+                                        type="date"
+                                        value={invoiceData.issue_date}
+                                        onChange={(e) => setInvoiceData({ ...invoiceData, issue_date: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                ) : (
+                                    <p className="text-base font-medium text-gray-900">{invoiceData.issue_date}</p>
+                                )}
                             </div>
                             <div className="mb-4">
                                 <label className="text-sm text-gray-500 block mb-1">Reference Quote No:</label>
@@ -293,7 +419,16 @@ export default function InvoiceDetailsScreen({
                             </div>
                             <div className="mb-4">
                                 <label className="text-sm text-gray-500 block mb-1">Due Date:</label>
-                                <p className="text-base font-medium text-gray-900">{invoiceData.due_date}</p>
+                                {isEditMode ? (
+                                    <input
+                                        type="date"
+                                        value={invoiceData.due_date}
+                                        onChange={(e) => setInvoiceData({ ...invoiceData, due_date: e.target.value })}
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                    />
+                                ) : (
+                                    <p className="text-base font-medium text-gray-900">{invoiceData.due_date}</p>
+                                )}
                             </div>
                             <div className="relative">
                                 <label className="text-sm text-gray-500 block mb-1">Status:</label>
@@ -310,14 +445,14 @@ export default function InvoiceDetailsScreen({
                                     {showStatusDropdown && (
                                         <div className="absolute top-full left-0 mt-2 w-56 bg-white border border-gray-200 rounded-lg shadow-lg z-10">
                                             <div className="py-1">
-                                                {statusOptions.map((option) => (
+                                                {statusChoices.map((choice) => (
                                                     <button
-                                                        key={option}
-                                                        onClick={() => handleStatusChange(option)}
-                                                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${status === option ? 'bg-gray-100 font-medium' : ''
+                                                        key={choice.value}
+                                                        onClick={() => handleStatusChange(choice.label)}
+                                                        className={`w-full text-left px-4 py-2 text-sm hover:bg-gray-50 transition-colors ${status === choice.label ? 'bg-gray-100 font-medium' : ''
                                                             }`}
                                                     >
-                                                        {option}
+                                                        {choice.label}
                                                     </button>
                                                 ))}
                                             </div>
@@ -348,9 +483,51 @@ export default function InvoiceDetailsScreen({
                                     <tr key={row.id} className="hover:bg-gray-50">
                                         <td className="px-4 py-3 text-sm font-medium text-gray-900">{row.product_group}</td>
                                         <td className="px-4 py-3 text-sm text-gray-900">{row.product_name}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-900 text-center">{row.quantity}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-900 text-center">
+                                            {isEditMode ? (
+                                                <input
+                                                    type="number"
+                                                    value={row.quantity}
+                                                    onChange={(e) => {
+                                                        const newItems = invoiceData.items.map((item: any) =>
+                                                            item.id.toString() === row.id ? { ...item, quantity: parseInt(e.target.value) || 0 } : item
+                                                        );
+                                                        setInvoiceData({ ...invoiceData, items: newItems });
+                                                        // Also update productRows for display
+                                                        const newRows = productRows.map(r =>
+                                                            r.id === row.id ? { ...r, quantity: parseInt(e.target.value) || 0 } : r
+                                                        );
+                                                        setProductRows(newRows);
+                                                    }}
+                                                    className="w-20 px-2 py-1 border border-gray-300 rounded text-center focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                            ) : (
+                                                row.quantity
+                                            )}
+                                        </td>
                                         <td className="px-4 py-3 text-sm text-gray-900">{row.unit}</td>
-                                        <td className="px-4 py-3 text-sm text-gray-900 text-right">{row.unit_price}</td>
+                                        <td className="px-4 py-3 text-sm text-gray-900 text-right">
+                                            {isEditMode ? (
+                                                <input
+                                                    type="number"
+                                                    value={row.unit_price}
+                                                    onChange={(e) => {
+                                                        const newItems = invoiceData.items.map((item: any) =>
+                                                            item.id.toString() === row.id ? { ...item, price_per_unit: e.target.value } : item
+                                                        );
+                                                        setInvoiceData({ ...invoiceData, items: newItems });
+                                                        // Also update productRows for display
+                                                        const newRows = productRows.map(r =>
+                                                            r.id === row.id ? { ...r, unit_price: e.target.value } : r
+                                                        );
+                                                        setProductRows(newRows);
+                                                    }}
+                                                    className="w-24 px-2 py-1 border border-gray-300 rounded text-right focus:outline-none focus:ring-2 focus:ring-blue-500"
+                                                />
+                                            ) : (
+                                                row.unit_price
+                                            )}
+                                        </td>
                                         <td className="px-4 py-3 text-sm text-gray-900 text-right">{row.amount}</td>
                                     </tr>
                                 ))}
@@ -460,7 +637,7 @@ export default function InvoiceDetailsScreen({
                 invoiceId={invoiceId || ''}
                 invoiceData={{
                     invoice_no: invoiceData.invoice_no,
-                    amount: totals.total
+                    amount: invoiceData.balance_amount || totals.to_be_voiced
                 }}
                 onPaymentRecorded={handlePaymentRecorded}
             />

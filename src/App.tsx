@@ -227,6 +227,16 @@ const App: React.FC = () => {
             }
           />
 
+          {/* Edit Invoice Page */}
+          <Route
+            path="/invoices/:invoiceId/edit"
+            element={
+              <ProtectedRoute>
+                <GenerateInvoicePage />
+              </ProtectedRoute>
+            }
+          />
+
           {/* Create Purchase Order Page */}
           <Route
             path="/create-purchase-order/:quotationId"

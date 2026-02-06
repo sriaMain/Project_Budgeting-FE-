@@ -112,6 +112,7 @@ export default function AddQuotePage() {
   const [isAddPOCModalOpen, setIsAddPOCModalOpen] = useState(false);
   const [isAddServiceModalOpen, setIsAddServiceModalOpen] = useState(false);
   const [originalStatus, setOriginalStatus] = useState<string>(''); // Track original status for edit mode
+  const [isConfirmedQuote, setIsConfirmedQuote] = useState(false); // Track if editing a confirmed quote
 
   const [quoteDetails, setQuoteDetails] = useState({
     author: username || '',
@@ -138,7 +139,7 @@ export default function AddQuotePage() {
   ]);
   const [taxPercentage, setTaxPercentage] = useState(0);
 
-  // Fetch all required data on component mount
+  // Fetch all required data on component mount, then fetch existing data if in edit mode
   useEffect(() => {
     initializeData();
   }, []);
@@ -181,11 +182,9 @@ export default function AddQuotePage() {
             quoteName: data.project_name || ''
           });
         } else {
-          // Check if quote is confirmed - prevent editing
+          // Check if quote is confirmed - set flag but allow editing
           if (data.status?.toLowerCase() === 'confirmed') {
-            toast.error('Cannot edit a confirmed quote');
-            navigate('/pipeline');
-            return;
+            setIsConfirmedQuote(true);
           }
 
           // Map quote data
@@ -331,7 +330,17 @@ export default function AddQuotePage() {
 
   const handleDetailChange = (field: string, value: string) => {
     setQuoteDetails(prev => {
-      const updated = { ...prev, [field]: value };
+      let processedValue = value;
+
+      // Validate Quote Name - only alphabetic characters and spaces, max 25 chars
+      if (field === 'quoteName') {
+        // Remove any non-alphabetic characters (except spaces)
+        processedValue = value.replace(/[^a-zA-Z\s]/g, '');
+        // Limit to 25 characters
+        processedValue = processedValue.slice(0, 25);
+      }
+
+      const updated = { ...prev, [field]: processedValue };
       if (field === 'client') {
         updated.poc = '';
       }
@@ -552,7 +561,8 @@ export default function AddQuotePage() {
                       type="date"
                       value={quoteDetails.dateOfIssue}
                       onChange={(e) => handleDetailChange('dateOfIssue', e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      disabled={isConfirmedQuote}
+                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] items-start sm:items-center gap-2 sm:gap-6">
@@ -562,8 +572,8 @@ export default function AddQuotePage() {
                         <select
                           value={quoteDetails.client}
                           onChange={(e) => handleDetailChange('client', e.target.value)}
-                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base appearance-none bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                          disabled={isLoadingData}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base appearance-none bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          disabled={isLoadingData || isConfirmedQuote}
                         >
                           <option value="">
                             {isLoadingData ? 'Loading clients...' : 'Enter Client Name'}
@@ -579,7 +589,8 @@ export default function AddQuotePage() {
                       <button
                         type="button"
                         onClick={() => setIsAddClientModalOpen(true)}
-                        className="flex-shrink-0 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors shadow-md hover:shadow-lg active:scale-95"
+                        disabled={isConfirmedQuote}
+                        className="flex-shrink-0 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-blue-600"
                         title="Add New Client"
                       >
                         <Plus size={20} strokeWidth={2.5} />
@@ -594,8 +605,8 @@ export default function AddQuotePage() {
                         <select
                           value={quoteDetails.poc}
                           onChange={(e) => handleDetailChange('poc', e.target.value)}
-                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base appearance-none bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                          disabled={!quoteDetails.client || isLoadingData}
+                          className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base appearance-none bg-white focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                          disabled={!quoteDetails.client || isLoadingData || isConfirmedQuote}
                         >
                           <option value="">
                             {!quoteDetails.client ? 'Select client first' : 'Select POC'}
@@ -613,7 +624,7 @@ export default function AddQuotePage() {
                       <button
                         type="button"
                         onClick={() => setIsAddPOCModalOpen(true)}
-                        disabled={!quoteDetails.client}
+                        disabled={!quoteDetails.client || isConfirmedQuote}
                         className="flex-shrink-0 flex items-center justify-center w-10 h-10 sm:w-11 sm:h-11 bg-blue-600 hover:bg-blue-700 text-white rounded transition-colors shadow-md hover:shadow-lg active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
                         title="Add New POC"
                       >
@@ -624,13 +635,18 @@ export default function AddQuotePage() {
 
                   <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] items-start sm:items-center gap-2 sm:gap-6">
                     <label className="text-sm sm:text-base font-medium text-gray-700">{projectId ? 'Project' : 'Quote'} Name</label>
-                    <input
-                      type="text"
-                      placeholder={`Enter ${projectId ? 'Project' : 'Quote'} Name`}
-                      value={quoteDetails.quoteName}
-                      onChange={(e) => handleDetailChange('quoteName', e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                    />
+                    <div className="flex-1">
+                      <input
+                        type="text"
+                        placeholder={`Enter ${projectId ? 'Project' : 'Quote'} Name`}
+                        value={quoteDetails.quoteName}
+                        onChange={(e) => handleDetailChange('quoteName', e.target.value)}
+                        maxLength={25}
+                        disabled={isConfirmedQuote}
+                        className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
+                      />
+                      <p className="text-xs text-gray-500 mt-1">{quoteDetails.quoteName.length}/25 characters (alphabets only)</p>
+                    </div>
                   </div>
                 </div>
 
@@ -650,7 +666,8 @@ export default function AddQuotePage() {
                       type="date"
                       value={quoteDetails.dueDate}
                       onChange={(e) => handleDetailChange('dueDate', e.target.value)}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      disabled={isConfirmedQuote}
+                      className="w-full px-3 sm:px-4 py-2 sm:py-2.5 border border-gray-300 rounded text-sm sm:text-base focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 disabled:bg-gray-100 disabled:cursor-not-allowed"
                     />
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-[160px_1fr] items-start sm:items-center gap-2 sm:gap-6">

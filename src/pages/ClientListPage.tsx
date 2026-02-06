@@ -61,6 +61,21 @@ interface ClientListProps {
 }
 
 export function ClientListPage({ clients, onAddClient, onSelectClient }: ClientListProps) {
+  const [searchQuery, setSearchQuery] = useState('');
+
+  // Filter clients based on search query
+  const filteredClients = clients.filter(client => {
+    const query = searchQuery.toLowerCase();
+    return (
+      client.company_name.toLowerCase().includes(query) ||
+      client.email.toLowerCase().includes(query) ||
+      client.mobile_number.toLowerCase().includes(query) ||
+      client.street_address?.toLowerCase().includes(query) ||
+      client.city?.toLowerCase().includes(query) ||
+      client.state?.toLowerCase().includes(query)
+    );
+  });
+
   return (
     <div className="space-y-4 sm:space-y-6 animate-fade-in-down">
       {/* Header Section */}
@@ -72,6 +87,8 @@ export function ClientListPage({ clients, onAddClient, onSelectClient }: ClientL
             <input
               type="text"
               placeholder="Search contacts..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 w-full sm:w-64 text-sm sm:text-base"
             />
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-4 h-4" />
@@ -101,8 +118,8 @@ export function ClientListPage({ clients, onAddClient, onSelectClient }: ClientL
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-200 bg-white">
-              {clients.length > 0 ? (
-                clients.map(client => (
+              {filteredClients.length > 0 ? (
+                filteredClients.map(client => (
                   <tr
                     key={client.id}
                     className="hover:bg-gray-50 transition-colors group cursor-pointer"
@@ -136,8 +153,8 @@ export function ClientListPage({ clients, onAddClient, onSelectClient }: ClientL
 
       {/* Mobile Card View - Visible on mobile only */}
       <div className="md:hidden space-y-4">
-        {clients.length > 0 ? (
-          clients.map(client => (
+        {filteredClients.length > 0 ? (
+          filteredClients.map(client => (
             <div
               key={client.id}
               onClick={() => onSelectClient(client.id)}

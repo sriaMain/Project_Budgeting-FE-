@@ -26,7 +26,8 @@ interface ProductRow {
 
 export default function GenerateInvoicePage() {
     const navigate = useNavigate();
-    const { quotationId } = useParams<{ quotationId: string }>();
+    const { quotationId, invoiceId } = useParams<{ quotationId?: string; invoiceId?: string }>();
+    const isEditMode = !!invoiceId;
 
     const [referenceQuoteNo, setReferenceQuoteNo] = useState(quotationId || '40');
     const [author, setAuthor] = useState('');
@@ -40,12 +41,73 @@ export default function GenerateInvoicePage() {
     const [termsConditions, setTermsConditions] = useState('No refunds');
     const [isSubmitting, setIsSubmitting] = useState(false);
     const [isLoading, setIsLoading] = useState(true);
+    const [invoiceClientId, setInvoiceClientId] = useState<number | null>(null);
+    const [invoiceQuoteId, setInvoiceQuoteId] = useState<number | null>(null);
 
     const [productRows, setProductRows] = useState<ProductRow[]>([]);
 
-    // Fetch quote data when component mounts
+    // Fetch quote or invoice data when component mounts
     React.useEffect(() => {
-        const fetchQuoteData = async () => {
+        const fetchData = async () => {
+            // If in edit mode, fetch invoice data
+            if (isEditMode && invoiceId) {
+                try {
+                    setIsLoading(true);
+                    const response = await axiosInstance.get(`invoices/${invoiceId}/`);
+                    const invoiceData = response.data;
+
+                    console.log('Fetched invoice data for edit:', invoiceData);
+
+                    // Store client and quote IDs for update
+                    setInvoiceClientId(invoiceData.client);
+                    setInvoiceQuoteId(invoiceData.quote);
+
+                    // Populate form fields from invoice data
+                    setReferenceQuoteNo(invoiceData.invoice_no || invoiceData.quote_no || '');
+                    setClient(invoiceData.client_name || '');
+                    setReferenceQuoteName(invoiceData.project?.project_name || '');
+                    setAuthor(invoiceData.created_by_name || '');
+                    setDateOfIssue(invoiceData.issue_date || '');
+                    setDueDate(invoiceData.due_date || '');
+                    setNotes(invoiceData.notes || 'Pay within 30 days');
+                    setTermsConditions(invoiceData.terms_conditions || 'No refunds');
+                    setTaxPercentage(invoiceData.tax_percentage || '0');
+
+                    // Calculate due days from dates
+                    if (invoiceData.issue_date && invoiceData.due_date) {
+                        const issueDate = new Date(invoiceData.issue_date);
+                        const dueDate = new Date(invoiceData.due_date);
+                        const diffTime = Math.abs(dueDate.getTime() - issueDate.getTime());
+                        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                        setDueDays(diffDays.toString());
+                    }
+
+                    // Populate product rows from invoice items
+                    if (invoiceData.items && Array.isArray(invoiceData.items)) {
+                        const rows: ProductRow[] = invoiceData.items.map((item: any, index: number) => ({
+                            id: `${index + 1}`,
+                            quote_item_id: item.id,
+                            selected: true,
+                            group: 'Service',
+                            product: item.product_service || '',
+                            description: item.description || '',
+                            quantity: parseFloat(item.quantity || '1'),
+                            unit: item.unit || 'hours',
+                            unitPrice: parseFloat(item.price_per_unit || '0'),
+                            amount: parseFloat(item.amount || '0')
+                        }));
+                        setProductRows(rows);
+                    }
+                } catch (error) {
+                    console.error('Error fetching invoice data:', error);
+                    toast.error('Failed to load invoice data');
+                } finally {
+                    setIsLoading(false);
+                }
+                return;
+            }
+
+            // Otherwise, fetch quote data (create mode)
             if (!quotationId) {
                 setIsLoading(false);
                 // Set default empty row if no quoteId
@@ -147,8 +209,8 @@ export default function GenerateInvoicePage() {
             }
         };
 
-        fetchQuoteData();
-    }, [quotationId]);
+        fetchData();
+    }, [quotationId, invoiceId, isEditMode]);
 
     const handleCheckboxChange = (id: string) => {
         setProductRows(rows =>
@@ -210,52 +272,86 @@ export default function GenerateInvoicePage() {
         try {
             setIsSubmitting(true);
 
-            // Get selected quote items with their quantities
-            console.log('All product rows:', productRows);
-            console.log('Selected rows:', productRows.filter(row => row.selected));
+            if (isEditMode && invoiceId) {
+                // Edit mode - Update existing invoice
+                const updateData = {
+                    status: 'Draft', // You can make this dynamic if needed
+                    client: invoiceClientId,
+                    quote: invoiceQuoteId,
+                    issue_date: dateOfIssue,
+                    due_date: dueDate,
+                    notes: notes,
+                    terms_conditions: termsConditions,
+                    items: productRows
+                        .filter(row => row.selected)
+                        .map(row => ({
+                            product_service: row.quote_item_id || 0,
+                            description: row.description,
+                            quantity: row.quantity.toString(),
+                            unit: row.unit,
+                            price_per_unit: row.unitPrice.toString(),
+                            discount_percentage: '0.00',
+                            amount: row.amount.toString()
+                        }))
+                };
 
-            const invoiceItems = productRows
-                .filter(row => row.selected && row.quote_item_id) // Only selected items with quote_item_id
-                .map(row => ({
-                    quote_item_id: row.quote_item_id!,
-                    quantity: row.quantity
-                }));
+                console.log('Updating invoice with data:', updateData);
 
-            console.log('Invoice items:', invoiceItems);
+                const response = await axiosInstance.put(`invoices/${invoiceId}/`, updateData);
 
-            // Prepare invoice data matching new API request format
-            const invoiceData: any = {
-                quote_id: parseInt(quotationId || referenceQuoteNo),
-                due_days: parseInt(dueDays),
-                notes: notes,
-                terms_conditions: termsConditions
-            };
-
-            // Add invoice_items if we have valid items
-            if (invoiceItems.length > 0) {
-                invoiceData.invoice_items = invoiceItems;
-                console.log('Including invoice items with quantities:', invoiceItems);
+                if (response.status === 200) {
+                    toast.success('Invoice updated successfully!');
+                    navigate(`/invoices/${invoiceId}`);
+                }
             } else {
-                console.log('No invoice_items - backend will use all items from quote with original quantities');
-            }
+                // Create mode - Generate new invoice
+                // Get selected quote items with their quantities
+                console.log('All product rows:', productRows);
+                console.log('Selected rows:', productRows.filter(row => row.selected));
 
-            console.log('Creating invoice with data:', invoiceData);
-            console.log('Payload stringified:', JSON.stringify(invoiceData, null, 2));
-            console.log('Does payload have invoice_items?', 'invoice_items' in invoiceData);
-            console.log('invoice_items value:', invoiceData.invoice_items);
+                const invoiceItems = productRows
+                    .filter(row => row.selected && row.quote_item_id) // Only selected items with quote_item_id
+                    .map(row => ({
+                        quote_item_id: row.quote_item_id!,
+                        quantity: row.quantity
+                    }));
 
-            // Make API call
-            const response = await axiosInstance.post('invoices/generate/', invoiceData);
+                console.log('Invoice items:', invoiceItems);
 
-            if (response.status === 200 || response.status === 201) {
-                toast.success(response.data.message || 'Invoice generated successfully!');
-                const invoiceId = response.data.invoice?.id || '1';
-                // Navigate to the newly created invoice using ID
-                navigate(`/invoices/${invoiceId}`);
+                // Prepare invoice data matching new API request format
+                const invoiceData: any = {
+                    quote_id: parseInt(quotationId || referenceQuoteNo),
+                    due_days: parseInt(dueDays),
+                    notes: notes,
+                    terms_conditions: termsConditions
+                };
+
+                // Add invoice_items if we have valid items
+                if (invoiceItems.length > 0) {
+                    invoiceData.invoice_items = invoiceItems;
+                    console.log('Including invoice items with quantities:', invoiceItems);
+                } else {
+                    console.log('No invoice_items - backend will use all items from quote with original quantities');
+                }
+
+                console.log('Creating invoice with data:', invoiceData);
+                console.log('Payload stringified:', JSON.stringify(invoiceData, null, 2));
+                console.log('Does payload have invoice_items?', 'invoice_items' in invoiceData);
+                console.log('invoice_items value:', invoiceData.invoice_items);
+
+                // Make API call
+                const response = await axiosInstance.post('invoices/generate/', invoiceData);
+
+                if (response.status === 200 || response.status === 201) {
+                    toast.success(response.data.message || 'Invoice generated successfully!');
+                    const newInvoiceId = response.data.invoice?.id || '1';
+                    // Navigate to the newly created invoice using ID
+                    navigate(`/invoices/${newInvoiceId}`);
+                }
             }
         } catch (error: any) {
-            console.error('Error creating invoice:', error);
-            const errorMessage = error.response?.data?.message || error.response?.data?.error || 'Failed to create invoice. Please try again.';
+            console.error('Error with invoice:', error);
+            const errorMessage = error.response?.data?.message || error.response?.data?.error || `Failed to ${isEditMode ? 'update' : 'create'} invoice. Please try again.`;
             toast.error(errorMessage);
         } finally {
             setIsSubmitting(false);
@@ -274,7 +370,9 @@ export default function GenerateInvoicePage() {
                         >
                             <ArrowLeft className="w-5 h-5 text-gray-600" />
                         </button>
-                        <h1 className="text-xl md:text-2xl font-bold text-gray-900">Invoice</h1>
+                        <h1 className="text-xl md:text-2xl font-bold text-gray-900">
+                            {isEditMode ? 'Edit Invoice' : 'Create Invoice'}
+                        </h1>
                     </div>
                 </div>
 
@@ -524,10 +622,10 @@ export default function GenerateInvoicePage() {
                                 {isSubmitting ? (
                                     <>
                                         <div className="w-5 h-5 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-                                        Creating...
+                                        {isEditMode ? 'Updating...' : 'Creating...'}
                                     </>
                                 ) : (
-                                    'Create Invoice'
+                                    isEditMode ? 'Update Invoice' : 'Create Invoice'
                                 )}
                             </button>
                         </div>

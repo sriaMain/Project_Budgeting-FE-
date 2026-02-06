@@ -65,11 +65,11 @@ export const ReusableTable = <T extends any>({
             <thead>
               <tr className="bg-gray-50 text-gray-700 font-semibold border-b border-gray-200">
                 {columns.map((col, index) => (
-                  <th key={index} className={`py-4 px-6 text-sm ${col.className || ''}`}>
+                  <th key={index} className={`py-4 px-6 text-base ${col.className || ''}`}>
                     {col.header}
                   </th>
                 ))}
-                {(onEdit || onDelete) && <th className="py-4 px-6 text-center w-24">Actions</th>}
+                {(onEdit || onDelete) && <th className="py-4 px-6 text-center text-base w-24">Actions</th>}
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100">
@@ -77,7 +77,7 @@ export const ReusableTable = <T extends any>({
                 data.map((item, rowIndex) => (
                   <tr key={String(item[keyField])} className="hover:bg-gray-50 transition-colors">
                     {columns.map((col, colIndex) => (
-                      <td key={colIndex} className="py-4 px-6 text-sm text-gray-600">
+                      <td key={colIndex} className={`py-4 px-6 text-sm text-gray-600 ${col.className || ''}`}>
                         {typeof col.accessor === 'function'
                           ? col.accessor(item)
                           : (item[col.accessor] as React.ReactNode)}

@@ -20,7 +20,7 @@ export const InfoDisplay: React.FC<InfoDisplayProps> = ({
 }) => {
     return (
         <div className={`flex flex-col gap-1 ${className}`}>
-            <label className="text-sm font-medium text-gray-600">
+            <label className="text-lg font-medium text-gray-600">
                 {label}:
             </label>
             <div className={`text-base text-gray-900 ${valueClassName}`}>
